@@ -11,13 +11,26 @@ __pycache__/
 build/
 dist/
 *.spec.bak
+*.exe
+*.dll
 
 # База данных и автосохранение
 data/*.db
 data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 
 # Пользовательские проекты графиков
 *.json
+
+# Личные документы и артефакты
+*.docx
+*.xlsx
+*.pdf
+
+# Архивы и дампы
+project_dump.txt
+*.zip
 
 # Личные проекты и черновики
 test_*.py
@@ -28,6 +41,11 @@ debug_*.py
 # Настройки редактора
 .vscode/
 .idea/
+
+# Кэши инструментов
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # ОС
 Thumbs.db
