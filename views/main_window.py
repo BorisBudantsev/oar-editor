@@ -71,11 +71,7 @@ class MainWindow(QMainWindow):
 
         # --- модель / контроллер / делегат ---
         self.project_model = ProjectModel(month=0, year=2025)
-        self.project_model.add_employee("Иванов Иван", "permanent")
-        self.project_model.add_employee("Петров Петр", "parttime")
-        self.project_model.add_employee("Сидорова Мария", "permanent")
-        self.project_model.add_employee("Кузнецов Алексей", "parttime")
-
+        
         self.controller = ProjectController(self.project_model, self.table)
         self.controller.on_change_callback = self._on_model_changed
 
