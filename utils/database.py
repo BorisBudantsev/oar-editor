@@ -2,8 +2,27 @@
 
 import sqlite3
 import os
+import sys
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "app_data.db")
+
+def _get_db_path():
+    """Определяет, куда писать app_data.db.
+
+    - Собранный .exe (frozen) → %APPDATA%\\OAR_Editor\\app_data.db
+    - Из исходников          → <проект>/data/app_data.db
+    """
+    if getattr(sys, "frozen", False):
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        app_dir = os.path.join(base, "OAR_Editor")
+    else:
+        app_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "data"
+        )
+    os.makedirs(app_dir, exist_ok=True)
+    return os.path.join(app_dir, "app_data.db")
+
+
+DB_PATH = _get_db_path()
 
 
 def get_connection():
@@ -43,7 +62,9 @@ def create_tables(conn):
 def _migrate_employees_unique(conn):
     """Если в старой схеме было UNIQUE(name) — пересоздаём таблицу без него."""
     cursor = conn.cursor()
-    cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='employees'")
+    cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='employees'"
+    )
     row = cursor.fetchone()
     if not row:
         return
@@ -51,7 +72,6 @@ def _migrate_employees_unique(conn):
     if "UNIQUE" not in sql:
         return
 
-    # Миграция: сохранить данные, пересоздать таблицу без UNIQUE
     cursor.execute("ALTER TABLE employees RENAME TO employees_old")
     cursor.execute("""
         CREATE TABLE employees (
