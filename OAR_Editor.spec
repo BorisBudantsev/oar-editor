@@ -11,7 +11,6 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets', 'assets'),          # иконка и любые ресурсы
-        ('data/app_data.db', 'data'),  # база справочника (если есть)
     ],
     hiddenimports=[
         'PyQt5.QtPrintSupport',
@@ -41,7 +40,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,                    # не показывать консоль при запуске
