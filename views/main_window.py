@@ -222,7 +222,6 @@ class MainWindow(QMainWindow):
             self.current_file = None
             self._apply_model(new_model)
             self.project_model.mark_clean()
-            AutosaveModel.clear()
 
             self.statusBar().showMessage(f"Создан проект: {MONTHS[month]} {year}")
 
