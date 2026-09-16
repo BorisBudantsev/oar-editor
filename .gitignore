@@ -1,0 +1,35 @@
+# Виртуальное окружение
+venv/
+.venv/
+
+# Python-кэш
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# База данных и автосохранение
+data/*.db
+data/*.db-journal
+
+# Пользовательские проекты графиков
+*.json
+
+# Личные проекты и черновики
+test_*.py
+debug_*.py
+проекты/
+проверка/
+
+# Настройки редактора
+.vscode/
+.idea/
+
+# ОС
+Thumbs.db
+.DS_Store
+desktop.ini
