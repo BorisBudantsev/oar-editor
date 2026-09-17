@@ -152,6 +152,8 @@ class MainWindow(QMainWindow):
         self.act_check = QAction("Список ошибок", self)
         self.act_stats = QAction("Анализ загруженности", self)
         self.act_settings = QAction("Настройки", self)
+        self.act_directory = QAction("Справочник сотрудников", self)
+        self.act_directory.triggered.connect(self._show_directory_dialog)
 
         self.act_exp_html = QAction("HTML", self)
         self.act_exp_excel = QAction("Excel", self)
@@ -187,6 +189,8 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.act_check)
         tools_menu.addAction(self.act_stats)
         tools_menu.addSeparator()
+        tools_menu.addAction(self.act_directory)
+        tools_menu.addSeparator()
         tools_menu.addAction(self.act_settings)
 
         export_menu = menubar.addMenu("Экспорт")
@@ -208,6 +212,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.act_redo)
         toolbar.addSeparator()
         toolbar.addAction(self.act_stats)
+        toolbar.addAction(self.act_directory)
 
     # ------------------------------------------------------------------
     # Проект: создание / открытие / сохранение
@@ -340,6 +345,11 @@ class MainWindow(QMainWindow):
         from views.stats_dialog import StatsDialog
         report = build_report(self.project_model)
         dlg = StatsDialog(self.project_model, report, self._get_scale(), self)
+        dlg.exec_()
+        
+    def _show_directory_dialog(self):
+        from views.dialogs import EmployeeDirectoryDialog
+        dlg = EmployeeDirectoryDialog(self)
         dlg.exec_()
 
     # ------------------------------------------------------------------
