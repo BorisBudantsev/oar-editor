@@ -526,11 +526,43 @@ class MainWindow(QMainWindow):
 
     def _ctx_paste(self, row, col):
         from PyQt5.QtWidgets import QApplication
+        from utils.constants import (
+            CODES_OPERATION, CODES_ENDO, SPECIAL_VALUES,
+            CATEGORY_PERMANENT, CATEGORY_PARTTIME,
+        )
+
         text = QApplication.clipboard().text().strip()
         if not text:
             return
         item = self.table.item(row, col)
         if not item:
+            return
+
+        row_type, data = self.controller.get_row_info(row)
+
+        if row_type == 'employee':
+            current = self.controller.get_cell_value(row, col)
+            if data['category'] == CATEGORY_PERMANENT:
+                allowed = set(
+                    [""] + list(CODES_OPERATION) + list(CODES_ENDO)
+                    + ["Д", "вых", "до 17", "до 16"]
+                )
+            else:  # parttime — учитываем правило «*» перед рабочим кодом
+                if current == "":
+                    allowed = {"*"}
+                elif current == "*":
+                    allowed = set(list(CODES_OPERATION) + list(CODES_ENDO) + ["Д", ""])
+                else:  # current — рабочий код
+                    allowed = set(list(CODES_OPERATION) + list(CODES_ENDO) + ["Д", "*"])
+        elif row_type == 'special':
+            allowed = set(list(SPECIAL_VALUES) + [""])
+        else:
+            return
+
+        if text not in allowed:
+            self.statusBar().showMessage(
+                f"Недопустимое значение для вставки: «{text}»"
+            )
             return
 
         old_value = self.controller.get_cell_value(row, col)
@@ -540,7 +572,7 @@ class MainWindow(QMainWindow):
         cmd = CellEditCommand(self.controller, row, col, old_value, text)
         self.undo_stack.push(cmd)
         self.statusBar().showMessage("Вставлено")
-
+        
     def _ctx_clear_cell(self, row, col):
         item = self.table.item(row, col)
         if not item:
