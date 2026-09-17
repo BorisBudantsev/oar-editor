@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QToolBar, QAction, QTableWidget,
     QComboBox, QLabel, QMessageBox, QUndoStack
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 
 from models.project_model import ProjectModel
 from models.employee_model import EmployeeModel
@@ -33,6 +33,10 @@ class MainWindow(QMainWindow):
         # undo-стек создаём ДО _create_actions, чтобы act_undo/act_redo
         # могли ссылаться на self.undo_stack
         self.undo_stack = QUndoStack(self)
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(1500)
+        self._autosave_timer.timeout.connect(self._do_autosave)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -278,6 +282,9 @@ class MainWindow(QMainWindow):
         self.last_click_day = None
         self.undo_stack.clear()
         self._refresh_validation()
+        # Немедленный автосейв - чтобы только что созданный/открытый
+        # восстановленный проект сразу попал в БД и не потерялся
+        self._do_autosave()
 
     def _update_header(self):
         m = self.project_model.month
@@ -296,21 +303,31 @@ class MainWindow(QMainWindow):
         m = self.project_model.month
         y = self.project_model.year
         return f"График_{MONTHS[m]}_{y}.json"
+    
+    def _do_autosave(self):
+        """Реальное сохранение в SQLite. Вызывается по таймеру или принудительно."""
+        try:
+            AutosaveModel.save(self.project_model.to_json())
+        except Exception:
+            pass
 
+    def _flush_autosave(self):
+        """Принудительно сбрасывает отложенный автосейв (при закрытии окна)."""
+        if self._autosave_timer.isActive():
+            self._autosave_timer.stop()
+            self._do_autosave()
     # ------------------------------------------------------------------
     # Валидация и автосохранение
     # ------------------------------------------------------------------
     def _refresh_validation(self):
         errors = check_schedule(self.project_model)
         self.controller.apply_validation(errors)
-        try:
-            AutosaveModel.save(self.project_model.to_json())
-        except Exception:
-            pass
+ 
 
     def _on_model_changed(self):
         """Callback контроллера — вызывается при любом изменении модели."""
         self._refresh_validation()
+        self._autosave_timer.start()
 
     def _show_errors_dialog(self):
         from views.validation_dialog import ValidationDialog
@@ -570,6 +587,9 @@ class MainWindow(QMainWindow):
     # Закрытие окна
     # ------------------------------------------------------------------
     def closeEvent(self, event):
+        # принудительно сбросим отложенный автосейв
+        # чтобы последние изменения не потерялись, если пользователь закрыл окно сразу
+        self._flush_autosave
         if not self.project_model.is_dirty():
             event.accept()
             return
