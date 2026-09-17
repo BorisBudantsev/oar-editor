@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         self.current_file = None
         self.selected_days = set()
         self.last_click_day = None
+        self._project_loaded = False
 
         # undo-стек создаём ДО _create_actions, чтобы act_undo/act_redo
         # могли ссылаться на self.undo_stack
@@ -104,8 +105,10 @@ class MainWindow(QMainWindow):
         self._update_header()
         self._update_title()
 
-        # первичная проверка/автосохранение
-        self._refresh_validation()
+             # первичная проверка — только если проект уже загружен
+        # (создан, открыт или восстановлен из автосейва)
+        if self._project_loaded:
+            self._refresh_validation()
 
         self.statusBar().showMessage("Готов к работе")
         self.statusBar().setFixedHeight(25)
@@ -276,6 +279,7 @@ class MainWindow(QMainWindow):
     # Внутренние
     # ------------------------------------------------------------------
     def _apply_model(self, new_model):
+        self._project_loaded = True
         self.project_model = new_model
         self.controller = ProjectController(self.project_model, self.table)
         self.controller.on_change_callback = self._on_model_changed
@@ -292,18 +296,23 @@ class MainWindow(QMainWindow):
         self._do_autosave()
 
     def _update_header(self):
+        if not self._project_loaded:
+            self.header_label.setText("График не создан")
+            return
         m = self.project_model.month
         y = self.project_model.year
         self.header_label.setText(f"График: {MONTHS[m]} {y}")
 
     def _update_title(self):
         base = "Редактор графика ОАР"
+        if not self._project_loaded:
+            self.setWindowTitle(base)
+            return
         if self.current_file:
             fname = self.current_file.replace("\\", "/").split("/")[-1]
             self.setWindowTitle(f"{base} — {fname}")
         else:
             self.setWindowTitle(f"{base} — без имени")
-
     def _default_filename(self):
         m = self.project_model.month
         y = self.project_model.year
