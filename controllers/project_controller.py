@@ -107,12 +107,20 @@ class ProjectController:
                     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsEditable | Qt.ItemIsSelectable)
                     self.table.setItem(row, 2 + day_idx, item)
 
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Interactive)
-        self.table.setColumnWidth(0, 35)
-        self.table.setColumnWidth(1, 240)
-        for c in range(2, col_count):
-            self.table.setColumnWidth(c, 38)
+                header = self.table.horizontalHeader()
+                # Минимальная ширина столбца дня: чтобы «ЭНД1» влезал
+                header.setMinimumSectionSize(28)
+        
+                # Колонка «№» — фиксированная, нельзя тащить мышью
+                header.setSectionResizeMode(0, QHeaderView.Fixed)
+                # Колонка «ФИО» — можно тянуть мышью
+                header.setSectionResizeMode(1, QHeaderView.Interactive)
+                # Столбцы дней — растягиваются на всю доступную ширину
+                for c in range(2, col_count):
+                    header.setSectionResizeMode(c, QHeaderView.Stretch)
+        
+                self.table.setColumnWidth(0, 35)
+                self.table.setColumnWidth(1, 240)
 
         self._adjust_cell_fonts()
         self.table.verticalHeader().setVisible(False)
