@@ -52,3 +52,5 @@ Thumbs.db
 .DS_Store
 desktop.ini
 *.bak
+# pytest
+.pytest_cache/
