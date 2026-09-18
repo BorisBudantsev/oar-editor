@@ -4,7 +4,7 @@ import calendar
 from PyQt5.QtWidgets import QTableWidgetItem, QHeaderView
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont, QBrush, QColor
-from utils.constants import CATEGORY_PERMANENT, CATEGORY_PARTTIME
+from utils.constants import CATEGORY_PERMANENT, CATEGORY_PARTTIME, WORKPLACE_CODES
 
 
 COLOR_WEEKEND = QColor(219, 219, 219)
@@ -201,19 +201,31 @@ class ProjectController:
     def clear_days(self, day_numbers):
         """Очищает назначения сотрудников в указанных днях (1-based).
 
+        Для постоянных — пустая строка.
+        Для совместителей:
+          - рабочий код → «*» (снять рабочее место, но оставить доступность);
+          - «*» → пустая строка (полностью убрать доступность);
+          - пустая строка → остаётся пустой.
         Служебные строки «Э» и «О» не трогаются.
         """
         days = self.model.days_in_month()
 
+        # 1. Обновляем модель
         for emp in self.model.employees:
+            is_parttime = emp['category'] == CATEGORY_PARTTIME
             for d in day_numbers:
                 idx = d - 1
-                if 0 <= idx < days:
+                if not (0 <= idx < days):
+                    continue
+                current = emp["days"][idx]
+                if is_parttime and current in WORKPLACE_CODES:
+                    emp["days"][idx] = "*"
+                else:
                     emp["days"][idx] = ""
 
         self.model._dirty = True
 
-        # Обновляем ячейки без сигналов
+        # 2. Обновляем таблицу без сигналов — читаем актуальное значение из модели
         self.table.blockSignals(True)
         for row, (row_type, data) in enumerate(self.row_map):
             if row_type != 'employee':
@@ -221,10 +233,11 @@ class ProjectController:
             for d in day_numbers:
                 col = d + 1  # 0=№, 1=ФИО, 2=день1 → колонка дня N = N+1
                 idx = d - 1
-                if 0 <= idx < days:
-                    item = self.table.item(row, col)
-                    if item is not None:
-                        item.setText("")
+                if not (0 <= idx < days):
+                    continue
+                item = self.table.item(row, col)
+                if item is not None:
+                    item.setText(data["days"][idx])
         self.table.blockSignals(False)
 
     # ------------------------------------------------------------------
