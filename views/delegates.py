@@ -60,7 +60,9 @@ class ScheduleDelegate(QStyledItemDelegate):
                 if current == "":
                     values = ["*", CLEAR_LABEL]
                 else:
-                    values = list(WORKPLACE_CODES) + [CLEAR_LABEL]
+                    # "*" обязательно в списке, иначе текущее значение не подсветится
+                    # и ячейка затрётся при первом же клике вне редактора
+                    values = list(WORKPLACE_CODES) + ["*", CLEAR_LABEL]
         elif row_type == 'special':
             values = list(SPECIAL_VALUES) + [CLEAR_LABEL]
         else:

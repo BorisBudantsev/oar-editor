@@ -593,6 +593,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Вставлено")
         
     def _ctx_clear_cell(self, row, col):
+        from utils.constants import CATEGORY_PARTTIME, WORKPLACE_CODES
+
         item = self.table.item(row, col)
         if not item:
             return
@@ -601,10 +603,24 @@ class MainWindow(QMainWindow):
         if old_value == "":
             return
 
-        cmd = CellEditCommand(self.controller, row, col, old_value, "")
+        row_type, data = self.controller.get_row_info(row)
+
+        # Для совместителя с рабочим кодом «очистить» возвращает «*»
+        # (см. RULES.md: рабочее место снимается обратно до доступности)
+        if row_type == 'employee' and data['category'] == CATEGORY_PARTTIME:
+            if old_value in WORKPLACE_CODES:
+                new_value = "*"
+            else:
+                new_value = ""
+        else:
+            new_value = ""
+
+        if old_value == new_value:
+            return
+
+        cmd = CellEditCommand(self.controller, row, col, old_value, new_value)
         self.undo_stack.push(cmd)
         self.statusBar().showMessage("Ячейка очищена")
-
     # ------------------------------------------------------------------
     # Автосохранение
     # ------------------------------------------------------------------
