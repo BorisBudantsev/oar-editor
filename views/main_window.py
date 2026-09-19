@@ -656,7 +656,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # принудительно сбросим отложенный автосейв
         # чтобы последние изменения не потерялись, если пользователь закрыл окно сразу
-        self._flush_autosave
+        self._flush_autosave()
         if not self.project_model.is_dirty():
             event.accept()
             return

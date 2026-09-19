@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPen
 from utils.constants import (
-    CODES_PERMANENT, SPECIAL_VALUES, WORKPLACE_CODES,
+    CODES_PERMANENT, SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER, WORKPLACE_CODES,
     CATEGORY_PERMANENT, CATEGORY_PARTTIME, CLEAR_LABEL
 )
 
@@ -64,7 +64,11 @@ class ScheduleDelegate(QStyledItemDelegate):
                     # и ячейка затрётся при первом же клике вне редактора
                     values = list(WORKPLACE_CODES) + ["*", CLEAR_LABEL]
         elif row_type == 'special':
-            values = list(SPECIAL_VALUES) + [CLEAR_LABEL]
+            # data — ключ строки: «Э» или «О»
+            if data == "Э":
+                values = list(SPECIAL_VALUES_ENDO) + [CLEAR_LABEL]
+            else:
+                values = list(SPECIAL_VALUES_OPER) + [CLEAR_LABEL]
         else:
             return None
 

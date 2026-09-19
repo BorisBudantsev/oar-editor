@@ -3,6 +3,7 @@
 from utils.constants import (
     CODES_OPERATION, CODES_ENDO,
     CATEGORY_PERMANENT, CATEGORY_PARTTIME,
+    SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER,
 )
 
 
@@ -10,8 +11,9 @@ WORKING_CODES = CODES_OPERATION + CODES_ENDO + ["Д"]
 
 ALLOWED_PERMANENT = [""] + CODES_OPERATION + CODES_ENDO + ["Д", "вых", "до 17", "до 16"]
 ALLOWED_PARTTIME = ["", "*"] + CODES_OPERATION + CODES_ENDO + ["Д"]
-ALLOWED_SPECIAL = ["1", "2", "3", "4"]
 
+ALLOWED_SPECIAL_ENDO = list(SPECIAL_VALUES_ENDO)   # Э: 1..3
+ALLOWED_SPECIAL_OPER = list(SPECIAL_VALUES_OPER)   # О: 1..4
 
 def _to_int(s):
     try:
@@ -36,17 +38,18 @@ def check_day(model, day_idx):
     if e_val == "":
         errors.append({"day": day_num, "rule": "Места Э",
                        "message": "Не заполнено число мест в строке «Э»"})
-    elif e_val not in ALLOWED_SPECIAL:
+    elif e_val not in ALLOWED_SPECIAL_ENDO:
         errors.append({"day": day_num, "rule": "Места Э",
-                       "message": f"Недопустимое значение «{e_val}» в строке «Э»"})
+                       "message": f"Недопустимое значение «{e_val}» в строке «Э» "
+                                  f"(допустимо 1–3)"})
 
     if o_val == "":
         errors.append({"day": day_num, "rule": "Места О",
                        "message": "Не заполнено число мест в строке «О»"})
-    elif o_val not in ALLOWED_SPECIAL:
+    elif o_val not in ALLOWED_SPECIAL_OPER:
         errors.append({"day": day_num, "rule": "Места О",
-                       "message": f"Недопустимое значение «{o_val}» в строке «О»"})
-
+                       "message": f"Недопустимое значение «{o_val}» в строке «О» "
+                                  f"(допустимо 1–4)"})
     E = _to_int(e_val)
     O = _to_int(o_val)
     N_planned = E + O + 1
