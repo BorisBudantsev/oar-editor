@@ -33,7 +33,7 @@ project_dump.txt
 *.zip
 
 # Личные проекты и черновики
-test_*.py
+/test_*.py
 debug_*.py
 проекты/
 проверка/
