@@ -121,34 +121,40 @@ def load_model_from_file(file_path):
     except Exception as e:
         return None, f"Ошибка разбора данных:\n{e}"
 
-    # 9. Приводим длину массивов к количеству дней в месяце
+    # 9. Проверяем длину массивов (без молчаливого исправления)
     target_days = model.days_in_month()
-    _normalize_days_lengths(model, target_days)
+    try:
+        _validate_days_lengths(model, target_days)
+    except ValueError as e:
+        return None, f"Повреждённый файл: {e}"
 
     return model, ""
 
 
-def _normalize_days_lengths(model, target_days):
-    """Обрезает или добивает пустыми значениями массивы days и special
-    до длины target_days."""
-    # Сотрудники
+def _validate_days_lengths(model, target_days):
+    """Проверяет, что длины массивов days и special равны target_days.
+
+    При несоответствии возбуждает ValueError — молчаливое исправление
+    повреждённых данных недопустимо для медицинского графика.
+    """
     for emp in model.employees:
         days = emp.get("days", [])
-        if len(days) < target_days:
-            days.extend([""] * (target_days - len(days)))
-        elif len(days) > target_days:
-            del days[target_days:]
-        emp["days"] = days
+        if len(days) != target_days:
+            raise ValueError(
+                f"У сотрудника «{emp.get('name', '?')}» "
+                f"длина массива days = {len(days)}, ожидается {target_days}."
+            )
 
-    # Служебные строки
-    for key in list(model.special.keys()):
-        values = model.special[key]
-        if len(values) < target_days:
-            values.extend(["3"] * (target_days - len(values)))
-        elif len(values) > target_days:
-            del values[target_days:]
-        model.special[key] = values
-
+    for key, values in model.special.items():
+        if not isinstance(values, list):
+            raise ValueError(
+                f"Служебная строка «{key}» — не список."
+            )
+        if len(values) != target_days:
+            raise ValueError(
+                f"В служебной строке «{key}» длина = {len(values)}, "
+                f"ожидается {target_days}."
+            )
 
 # ----------------------------------------------------------------------
 # Диалоги
@@ -235,5 +241,8 @@ def _validate_and_build(text, data):
         return None, f"Ошибка разбора: {e}"
 
     target = model.days_in_month()
-    _normalize_days_lengths(model, target)
+    try:
+        _validate_days_lengths(model, target)
+    except ValueError as e:
+        return None, f"Повреждённый файл: {e}"
     return model, ""
