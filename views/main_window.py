@@ -18,6 +18,7 @@ from views.dialogs import NewProjectWizard
 from utils.constants import MONTHS
 from utils import storage
 from utils.validation import check_schedule
+from app_config import get
 
 
 class MainWindow(QMainWindow):
@@ -297,14 +298,14 @@ class MainWindow(QMainWindow):
 
     def _update_header(self):
         if not self._project_loaded:
-            self.header_label.setText("График не создан")
+            self.header_label.setText(get("empty_state"))
             return
         m = self.project_model.month
         y = self.project_model.year
-        self.header_label.setText(f"График: {MONTHS[m]} {y}")
+        self.header_label.setText(f"{get('app_title')}: {MONTHS[m]} {y}") 
 
     def _update_title(self):
-        base = "Редактор графика ОАР"
+        base = get("app_title")
         if not self._project_loaded:
             self.setWindowTitle(base)
             return
@@ -312,7 +313,7 @@ class MainWindow(QMainWindow):
             fname = self.current_file.replace("\\", "/").split("/")[-1]
             self.setWindowTitle(f"{base} — {fname}")
         else:
-            self.setWindowTitle(f"{base} — без имени")
+            self.setWindowTitle(f"{base} — без имени")   
     def _default_filename(self):
         m = self.project_model.month
         y = self.project_model.year

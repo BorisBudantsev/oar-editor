@@ -7,6 +7,7 @@ from PyQt5.QtGui import QTextDocument
 from PyQt5.QtPrintSupport import QPrinter
 
 from utils.constants import MONTHS, CATEGORY_PERMANENT, CATEGORY_PARTTIME
+from app_config import get
 
 
 # ----------------------------------------------------------------------
@@ -37,7 +38,9 @@ def _collect_data(model):
 
 
 def _default_name(model, ext):
-    return f"График_{MONTHS[model.month]}_{model.year}.{ext}"
+    return get("export_filename").format(
+        month=MONTHS[model.month], year=model.year, ext=ext
+    )
 
 
 # ----------------------------------------------------------------------
@@ -66,8 +69,7 @@ def build_html(model, scale=8):
 
     m = MONTHS[data['month']]
     y = data['year']
-    title = f"График работы ОАР на {m} {y}"
-
+    title = f"{get('app_title')} · {m} {y}"
     parts = [f"<html><head><meta charset='utf-8'>{css}</head><body>"]
     parts.append(f"<h1>{title}</h1>")
     parts.append("<table>")
@@ -158,8 +160,10 @@ def export_excel(parent, model, scale=8):
         center = Alignment(horizontal="center", vertical="center")
         left = Alignment(horizontal="left", vertical="center")
 
-        title_cell = ws.cell(row=1, column=1,
-                             value=f"График работы ОАР на {MONTHS[data['month']]} {data['year']}")
+        title_cell = ws.cell(
+            row=1, column=1,
+            value=f"{get('app_title')} · {MONTHS[data['month']]} {data['year']}"
+        )
         title_cell.font = Font(bold=True, size=scale + 2)
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=days + 2)
 
@@ -257,7 +261,9 @@ def export_word(parent, model, scale=8):
 
         heading = doc.add_paragraph()
         heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = heading.add_run(f"График работы ОАР на {MONTHS[data['month']]} {data['year']}")
+        run = heading.add_run(
+            f"{get('app_title')} · {MONTHS[data['month']]} {data['year']}"
+        )
         run.bold = True
         run.font.size = Pt(scale + 4)
 
@@ -354,7 +360,9 @@ def _category_ru(cat):
 
 
 def _default_stats_name(model, ext):
-    return f"Анализ_{MONTHS[model.month]}_{model.year}.{ext}"
+    return get("export_stats_filename").format(
+        month=MONTHS[model.month], year=model.year, ext=ext
+    )
 
 
 # ----------------------------------------------------------------------
@@ -378,7 +386,9 @@ def build_stats_html(model, report, scale=8):
     y = model.year
 
     parts = [f"<html><head><meta charset='utf-8'>{css}</head><body>"]
-    parts.append(f"<h1>Анализ загруженности ОАР на {m} {y}</h1>")
+    parts.append(
+        f"<h1>Анализ загруженности — {get('person_plural')}, {m} {y}</h1>"
+    )
 
     # --- Раздел 1: По сотрудникам ---
     parts.append("<h2>По сотрудникам</h2>")
@@ -600,7 +610,9 @@ def export_stats_word(parent, model, report, scale=8):
 
         h1 = doc.add_paragraph()
         h1.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = h1.add_run(f"Анализ загруженности ОАР на {m} {y}")
+        run = h1.add_run(
+            f"Анализ загруженности — {get('person_plural')}, {m} {y}"
+        )
         run.bold = True
         run.font.size = Pt(scale + 4)
 

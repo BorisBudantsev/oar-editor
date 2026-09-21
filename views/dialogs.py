@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from models.employee_model import EmployeeModel
 from utils.constants import CATEGORIES, MONTHS
+from app_config import get
 
 
 # ----------------------------------------------------------------------
@@ -78,7 +79,7 @@ class EmployeeListItemWidget(QWidget):
     def delete_employee(self):
         reply = QMessageBox.question(
             self, "Подтверждение",
-            f"Удалить сотрудника «{self.emp['name']}» из справочника?",
+            get("delete_question").format(name=self.emp['name']),
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
@@ -151,8 +152,8 @@ class PageMonthYear(QWizardPage):
 class PageEmployees(QWizardPage):
     def __init__(self):
         super().__init__()
-        self.setTitle("Выберите сотрудников")
-        self.setSubTitle("Отметьте галочками тех, кто должен попасть в график.")
+        self.setTitle(get("choose_title"))
+        self.setSubTitle(get("choose_subtitle")) 
 
         layout = QVBoxLayout(self)
 
@@ -162,7 +163,7 @@ class PageEmployees(QWizardPage):
         layout.addWidget(self.list_widget)
 
         # Кнопка добавления нового сотрудника
-        self.add_btn = QPushButton("Добавить сотрудника")
+        self.add_btn = QPushButton(get("add_button"))
         self.add_btn.clicked.connect(self.add_employee)
         layout.addWidget(self.add_btn)
 
@@ -226,7 +227,9 @@ class AddEmployeeDialog(QDialog):
 
     def __init__(self, parent=None, emp=None):
         super().__init__(parent)
-        self.setWindowTitle("Редактировать сотрудника" if emp else "Добавить сотрудника")
+        self.setWindowTitle(
+            get("edit_dialog_title") if emp else get("add_dialog_title")
+        )
         self.setModal(True)
 
         layout = QVBoxLayout(self)
@@ -268,7 +271,7 @@ class EmployeeDirectoryDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Справочник сотрудников")
+        self.setWindowTitle(get("directory_title"))
         self.setModal(True)
         self.resize(560, 560)
 
@@ -288,7 +291,7 @@ class EmployeeDirectoryDialog(QDialog):
 
         btn_row = QHBoxLayout()
 
-        self.add_btn = QPushButton("Добавить сотрудника")
+        self.add_btn = QPushButton(get("add_button"))
         self.add_btn.clicked.connect(self.add_employee)
         btn_row.addWidget(self.add_btn)
         btn_row.addStretch()
