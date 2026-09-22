@@ -110,6 +110,7 @@ def test_json_roundtrip_preserves_data():
     assert restored.employees[0]["days"][3] == "З"
     assert restored.employees[1]["days"][7] == "*"
     assert restored.special["Э"][2] == "2"
+    assert restored.role == m.role
 
 
 # ---------------------------------------------------------------

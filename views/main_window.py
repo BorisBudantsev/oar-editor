@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
     def _default_filename(self):
         m = self.project_model.month
         y = self.project_model.year
-        return f"График_{MONTHS[m]}_{y}.json"
+        return get("project_filename").format(month=MONTHS[m], year=y)
     
     def _do_autosave(self):
         """Реальное сохранение в SQLite. Вызывается по таймеру или принудительно."""

@@ -8,7 +8,7 @@ from utils.constants import PROJECT_VERSION
 from utils.storage import load_model_from_string
 
 
-def _valid_json(month=0, year=2025, employees=None, special=None):
+def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor"):
     """Собирает корректный JSON-проект."""
     if employees is None:
         employees = []
@@ -17,6 +17,7 @@ def _valid_json(month=0, year=2025, employees=None, special=None):
         special = {"Э": ["3"] * days, "О": ["3"] * days}
     return json.dumps({
         "version": PROJECT_VERSION,
+        "role": role,
         "month": month,
         "year": year,
         "employees": employees,
@@ -132,3 +133,35 @@ def test_load_project_with_employee():
     assert error == ""
     assert model.get_employee_count() == 1
     assert model.employees[0]["name"] == "Иванов И.И."
+ # ---------------------------------------------------------------
+# Проверка роли
+# ---------------------------------------------------------------
+
+def test_load_legacy_json_without_role():
+    """Старый JSON без поля role считается врачебным."""
+    text = _valid_json()
+    data = json.loads(text)
+    del data["role"]   # удаляем поле — симулируем v1.0
+    model, error = load_model_from_string(json.dumps(data))
+    # Роль приложения в тестах — doctor (по умолчанию), поэтому загрузка успешна
+    assert error == ""
+    assert model is not None
+    assert model.role == "doctor"
+
+
+def test_load_wrong_role_rejected():
+    """JSON медсестёр не открывается в приложении врачей."""
+    # Тесты запускаются с ролью doctor (по умолчанию)
+    text = _valid_json(role="nurse")
+    model, error = load_model_from_string(text)
+    assert model is None
+    assert "медицинских сестёр" in error or "врачей" in error
+
+
+def test_load_correct_role_accepted():
+    """JSON врачей открывается в приложении врачей."""
+    text = _valid_json(role="doctor")
+    model, error = load_model_from_string(text)
+    assert error == ""
+    assert model is not None
+    assert model.role == "doctor"

@@ -3,11 +3,13 @@
 import json
 import calendar
 from utils.constants import MONTHS, PROJECT_VERSION
+from app_config import ROLE
 
 class ProjectModel:
     def __init__(self, month=0, year=2025):
         self.month = month          # 0-11
         self.year = year
+        self.role = ROLE            # "doctor" или "nurse"
         self.employees = []         # список словарей {id, name, category, days: [...]}
         self.special = {
             "Э": [],   # эндоскопия
@@ -64,6 +66,7 @@ class ProjectModel:
     def to_json(self):
         data = {
             "version": PROJECT_VERSION,
+            "role": self.role,
             "month": self.month,
             "year": self.year,
             "employees": self.employees,
@@ -71,11 +74,13 @@ class ProjectModel:
             "nextId": self.next_id
         }
         return json.dumps(data, ensure_ascii=False, indent=2)
-
+    
     def from_json(self, json_str):
         data = json.loads(json_str)
         if data.get("version") != PROJECT_VERSION:
             print("Внимание: версия проекта отличается от текущей")
+        # Роль: старые файлы (v1.0) не имеют поля — считаем их врачебными
+        self.role = data.get("role", "doctor")
         self.month = data["month"]
         self.year = data["year"]
         self.employees = data["employees"]

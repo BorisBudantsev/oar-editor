@@ -4,6 +4,7 @@ import json
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from models.project_model import ProjectModel
 from utils.constants import PROJECT_VERSION
+from app_config import ROLE, get
 
 
 # ----------------------------------------------------------------------
@@ -72,6 +73,16 @@ def load_model_from_file(file_path):
     if version != PROJECT_VERSION:
         return None, (f"Несовместимая версия файла.\n\n"
                       f"Файл: {version}\nПрограмма ожидает: {PROJECT_VERSION}")
+        # 3.1. Проверка роли
+    file_role = data.get("role", "doctor")   # старые файлы без role = doctor
+    if file_role != ROLE:
+        file_role_name = "врачей" if file_role == "doctor" else "медицинских сестёр"
+        current_role_name = "врачей" if ROLE == "doctor" else "медицинских сестёр"
+        return None, (
+            f"Этот файл создан для графика дежурств {file_role_name}.\n\n"
+            f"Текущее приложение работает с графиком {current_role_name}.\n"
+            f"Откройте файл в соответствующем приложении."
+        )
 
     # 4. Обязательные поля
     required = ["month", "year", "employees", "special", "nextId"]
@@ -199,6 +210,16 @@ def _validate_and_build(text, data):
     if version != PROJECT_VERSION:
         return None, (f"Несовместимая версия: {version}. "
                       f"Ожидается {PROJECT_VERSION}.")
+        # Проверка роли
+    file_role = data.get("role", "doctor")
+    if file_role != ROLE:
+        file_role_name = "врачей" if file_role == "doctor" else "медицинских сестёр"
+        current_role_name = "врачей" if ROLE == "doctor" else "медицинских сестёр"
+        return None, (
+            f"Этот файл создан для графика дежурств {file_role_name}.\n\n"
+            f"Текущее приложение работает с графиком {current_role_name}.\n"
+            f"Откройте файл в соответствующем приложении."
+        )
 
     required = ["month", "year", "employees", "special", "nextId"]
     missing = [k for k in required if k not in data]

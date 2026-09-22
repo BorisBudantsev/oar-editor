@@ -82,6 +82,7 @@ CONFIG = {
         "empty_state": "График дежурств врачей не создан",
 
         # Экспорт
+        "project_filename": "График_врачей_{month}_{year}.json",
         "export_filename": "График_врачей_{month}_{year}.{ext}",
         "export_stats_filename": "Анализ_врачей_{month}_{year}.{ext}",
     },
@@ -108,6 +109,7 @@ CONFIG = {
         "choose_subtitle": "Отметьте галочками тех, кто должен попасть в график.",
         "empty_state": "График дежурств медицинских сестёр не создан",
 
+        "project_filename": "График_медсестёр_{month}_{year}.json",
         "export_filename": "График_медсестёр_{month}_{year}.{ext}",
         "export_stats_filename": "Анализ_медсестёр_{month}_{year}.{ext}",
     },
