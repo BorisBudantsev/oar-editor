@@ -27,6 +27,10 @@ data/*.db-shm
 *.docx
 *.xlsx
 *.pdf
+# Исходники иконок (не нужны в репо)
+assets/icon_*.png
+assets/icon_*.jpeg
+assets/icon_*.jpg
 # Экспортированные из приложения файлы
 График_*.html
 График_*.xlsx
