@@ -1,16 +1,14 @@
-# OAR_Editor.spec
-
+# OAR_Doctors.spec
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
-
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('assets', 'assets'),          # иконка и любые ресурсы
+        ('assets', 'assets'),
     ],
     hiddenimports=[
         'PyQt5.QtPrintSupport',
@@ -36,18 +34,18 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='OAR_Editor',
+    name='OAR_Doctors',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,                    # не показывать консоль при запуске
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/app.ico',            # иконка .exe
+    icon='assets/app_doctors.ico',
 )
