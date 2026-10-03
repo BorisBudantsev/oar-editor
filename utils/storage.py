@@ -166,6 +166,13 @@ def _validate_days_lengths(model, target_days):
                 f"В служебной строке «{key}» длина = {len(values)}, "
                 f"ожидается {target_days}."
             )
+    if not isinstance(model.notes, list):
+        raise ValueError("Поле 'notes' — не список.")
+    if len(model.notes) != target_days:
+        raise ValueError(
+            f"В поле 'notes' длина = {len(model.notes)}, "
+            f"ожидается {target_days}."
+        )
 
 # ----------------------------------------------------------------------
 # Диалоги

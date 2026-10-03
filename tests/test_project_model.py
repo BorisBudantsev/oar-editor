@@ -124,3 +124,21 @@ def test_dirty_flag():
     assert m.is_dirty()
     m.mark_clean()
     assert not m.is_dirty()
+    
+
+def test_json_roundtrip_preserves_notes():
+    """Примечания сохраняются и загружаются без потерь."""
+    m = ProjectModel(month=0, year=2025)
+    m.set_note(0, "отпуск")
+    m.set_note(5, "болезнь")
+    m.set_note(10, "конференция")
+
+    text = m.to_json()
+    restored = ProjectModel()
+    restored.from_json(text)
+
+    assert len(restored.notes) == 31
+    assert restored.notes[0] == "отпуск"
+    assert restored.notes[5] == "болезнь"
+    assert restored.notes[10] == "конференция"
+    assert restored.notes[1] == ""

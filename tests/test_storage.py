@@ -8,13 +8,15 @@ from utils.constants import PROJECT_VERSION
 from utils.storage import load_model_from_string
 
 
-def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor"):
+def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor", notes=None):
     """Собирает корректный JSON-проект."""
     if employees is None:
         employees = []
+    days = calendar.monthrange(year, month + 1)[1]
     if special is None:
-        days = calendar.monthrange(year, month + 1)[1]
         special = {"Э": ["3"] * days, "О": ["3"] * days}
+    if notes is None:
+        notes = [""] * days
     return json.dumps({
         "version": PROJECT_VERSION,
         "role": role,
@@ -22,6 +24,7 @@ def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor")
         "year": year,
         "employees": employees,
         "special": special,
+        "notes": notes,
         "nextId": 1,
     }, ensure_ascii=False)
 
@@ -165,3 +168,41 @@ def test_load_correct_role_accepted():
     assert error == ""
     assert model is not None
     assert model.role == "doctor"
+    
+
+# ---------------------------------------------------------------
+# Примечания (notes)
+# ---------------------------------------------------------------
+
+def test_load_with_notes():
+    """Примечания загружаются из JSON."""
+    days = calendar.monthrange(2025, 1)[1]
+    notes = [""] * days
+    notes[3] = "отпуск"
+    notes[10] = "учёба"
+    text = _valid_json(notes=notes)
+    model, error = load_model_from_string(text)
+    assert error == ""
+    assert model is not None
+    assert model.notes[3] == "отпуск"
+    assert model.notes[10] == "учёба"
+
+
+def test_load_without_notes_legacy():
+    """Файл версии 2.0 без поля notes загружается с пустыми примечаниями."""
+    data = json.loads(_valid_json())
+    del data["notes"]   # симулируем старый формат
+    model, error = load_model_from_string(json.dumps(data))
+    assert error == ""
+    assert model is not None
+    assert len(model.notes) == 31   # январь 2025
+    assert all(x == "" for x in model.notes)
+
+
+def test_load_too_short_notes():
+    """Слишком короткий массив примечаний — ошибка загрузки."""
+    days = calendar.monthrange(2025, 1)[1]
+    text = _valid_json(notes=[""] * 5)   # 5 вместо 31
+    model, error = load_model_from_string(text)
+    assert model is None
+    assert "notes" in error.lower() or "длина" in error.lower()
