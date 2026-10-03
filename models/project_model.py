@@ -15,15 +15,22 @@ class ProjectModel:
             "Э": [],   # эндоскопия
             "О": []    # операционная
         }
+        self.notes = []             # примечания по дням (свободный текст)
         self.next_id = 1
         self._dirty = False
 
         self._init_special_rows()
+        self._init_notes()
 
     def _init_special_rows(self):
         days = self.days_in_month()
         for key in self.special:
             self.special[key] = ["3"] * days
+
+    def _init_notes(self):
+        """Инициализирует массив примечаний пустыми строками."""
+        days = self.days_in_month()
+        self.notes = [""] * days
 
     def days_in_month(self):
         return calendar.monthrange(self.year, self.month + 1)[1]
@@ -63,6 +70,12 @@ class ProjectModel:
             self.special[row_key][day_index] = value
             self._dirty = True
 
+    def set_note(self, day_index, value):
+        """Записывает примечание для указанного дня (0-based)."""
+        if 0 <= day_index < len(self.notes):
+            self.notes[day_index] = value
+            self._dirty = True        
+
     def to_json(self):
         data = {
             "version": PROJECT_VERSION,
@@ -71,6 +84,7 @@ class ProjectModel:
             "year": self.year,
             "employees": self.employees,
             "special": self.special,
+            "notes": self.notes,
             "nextId": self.next_id
         }
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -86,6 +100,11 @@ class ProjectModel:
         self.employees = data["employees"]
         self.special = data["special"]
         self.next_id = data["nextId"]
+        # Примечания: в версии 2.0 поля не было — подставляем пустые
+        if "notes" in data and isinstance(data["notes"], list):
+            self.notes = data["notes"]
+        else:
+            self.notes = [""] * self.days_in_month()
         self._dirty = False
 
     def is_dirty(self):
