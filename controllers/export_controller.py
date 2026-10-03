@@ -5,8 +5,7 @@ import calendar
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtGui import QTextDocument
 from PyQt5.QtPrintSupport import QPrinter
-
-from utils.constants import MONTHS, CATEGORY_PERMANENT, CATEGORY_PARTTIME
+from utils.constants import MONTHS, WEEKDAY_SHORT, CATEGORY_PERMANENT, CATEGORY_PARTTIME
 from app_config import get
 
 
@@ -32,6 +31,7 @@ def _collect_data(model):
         'days': days,
         'employees': ordered,
         'special': model.special,
+        'notes': model.notes,
         'last_permanent_idx': len(permanent) - 1 if permanent and parttime else -1,
         'weekend_days': weekend_days,
     }
@@ -78,7 +78,8 @@ def build_html(model, scale=8):
     parts.append("<th>№</th><th>ФИО</th>")
     for d in range(1, days + 1):
         cls = "weekend" if d in weekend else ""
-        parts.append(f"<th class='{cls}'>{d}</th>")
+        wd = calendar.weekday(data['year'], data['month'] + 1, d)
+        parts.append(f"<th class='{cls}'>{d}<br>{WEEKDAY_SHORT[wd]}</th>")
     parts.append("</tr></thead><tbody>")
 
     for idx, emp in enumerate(data['employees']):
@@ -101,6 +102,15 @@ def build_html(model, scale=8):
             cls = "weekend" if (day + 1) in weekend else ""
             parts.append(f"<td class='{cls}'>{value}</td>")
         parts.append("</tr>")
+            # Строка примечаний
+    notes = data.get('notes', [])
+    parts.append("<tr>")
+    parts.append("<td></td><td></td>")
+    for day in range(days):
+        value = notes[day] if day < len(notes) else ""
+        cls = "weekend" if (day + 1) in weekend else ""
+        parts.append(f"<td class='{cls}'>{value}</td>")
+    parts.append("</tr>")
 
     parts.append("</tbody></table></body></html>")
     return "".join(parts)
@@ -171,13 +181,16 @@ def export_excel(parent, model, scale=8):
         ws.cell(row=start_row, column=1, value="№")
         ws.cell(row=start_row, column=2, value="ФИО")
         for d in range(1, days + 1):
-            ws.cell(row=start_row, column=2 + d, value=d)
+            wd = calendar.weekday(data['year'], data['month'] + 1, d)
+            ws.cell(row=start_row, column=2 + d, value=f"{d}\n{WEEKDAY_SHORT[wd]}")
         for c in range(1, days + 3):
             cell = ws.cell(row=start_row, column=c)
             cell.font = Font(bold=True)
-            cell.alignment = center
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = border
             cell.fill = header_fill
+        # Увеличиваем высоту строки заголовка, чтобы влезли два ряда
+        ws.row_dimensions[start_row].height = 30
         for d in weekend:
             ws.cell(row=start_row, column=2 + d).fill = weekend_fill
 
@@ -214,6 +227,19 @@ def export_excel(parent, model, scale=8):
                 if (c - 2) in weekend:
                     cell.fill = weekend_fill
             row += 1
+
+        # Строка примечаний (пустая метка слева, текст по дням)
+        notes = data.get('notes', [])
+        for day in range(days):
+            value = notes[day] if day < len(notes) else ""
+            c = ws.cell(row=row, column=3 + day, value=value)
+            c.alignment = center
+        for c in range(1, days + 3):
+            cell = ws.cell(row=row, column=c)
+            cell.border = border
+            if (c - 2) in weekend:
+                cell.fill = weekend_fill
+        row += 1
 
         ws.column_dimensions['A'].width = 5
         ws.column_dimensions['B'].width = 30
@@ -267,7 +293,7 @@ def export_word(parent, model, scale=8):
         run.bold = True
         run.font.size = Pt(scale + 4)
 
-        total_rows = len(data['employees']) + 2 + 1
+        total_rows = len(data['employees']) + 3 + 1   # +2 (Э, О) +1 (notes) +1 (шапка)
         total_cols = days + 2
         table = doc.add_table(rows=total_rows, cols=total_cols)
         table.style = 'Table Grid'
@@ -276,7 +302,8 @@ def export_word(parent, model, scale=8):
         hdr[0].text = "№"
         hdr[1].text = "ФИО"
         for d in range(1, days + 1):
-            hdr[1 + d].text = str(d)
+            wd = calendar.weekday(data['year'], data['month'] + 1, d)
+            hdr[1 + d].text = f"{d}\n{WEEKDAY_SHORT[wd]}"
 
         for idx, emp in enumerate(data['employees']):
             row = table.rows[idx + 1].cells
@@ -293,6 +320,13 @@ def export_word(parent, model, scale=8):
             for day in range(days):
                 value = values[day] if day < len(values) else ""
                 row[2 + day].text = str(value)
+                        # Строка примечаний
+        notes_start = special_start + len(data['special'])
+        notes = data.get('notes', [])
+        row = table.rows[notes_start].cells
+        for day in range(days):
+            value = notes[day] if day < len(notes) else ""
+            row[2 + day].text = str(value)
 
         def set_cell_bg(cell, color_hex):
             tcPr = cell._tc.get_or_add_tcPr()
