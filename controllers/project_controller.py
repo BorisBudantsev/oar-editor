@@ -37,6 +37,8 @@ class ProjectController:
             self.row_map.append(('employee', emp))
         for key in special.keys():
             self.row_map.append(('special', key))
+        # Строка примечаний — одна на каждый день, без названия
+        self.row_map.append(('notes', None))
 
         if permanent and parttime:
             self.last_permanent_row = len(permanent) - 1
@@ -102,6 +104,22 @@ class ProjectController:
                 self.table.setItem(row, 1, item_label)
 
                 for day_idx, value in enumerate(special[key]):
+                    item = QTableWidgetItem(value)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsEditable | Qt.ItemIsSelectable)
+                    self.table.setItem(row, 2 + day_idx, item)
+            elif row_type == 'notes':
+                # Строка примечаний: пустая ячейка в колонке №,
+                # пустая в колонке ФИО, редактируемые ячейки в днях
+                item_empty = QTableWidgetItem("")
+                item_empty.setFlags(Qt.NoItemFlags)
+                self.table.setItem(row, 0, item_empty)
+
+                item_empty2 = QTableWidgetItem("")
+                item_empty2.setFlags(Qt.NoItemFlags)
+                self.table.setItem(row, 1, item_empty2)
+
+                for day_idx, value in enumerate(model.notes):
                     item = QTableWidgetItem(value)
                     item.setTextAlignment(Qt.AlignCenter)
                     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsEditable | Qt.ItemIsSelectable)
@@ -278,6 +296,8 @@ class ProjectController:
             self.model.set_day(data['id'], day_index, value)
         elif row_type == 'special':
             self.model.set_special(data, day_index, value)
+        elif row_type == 'notes':
+            self.model.set_note(day_index, value)
 
     def _adjust_cell_fonts(self):
         base = QFont()
@@ -303,4 +323,8 @@ class ProjectController:
         elif row_type == 'special':
             values = self.model.special.get(data, [])
             return values[day_index] if day_index < len(values) else ""
-        return ""           
+        elif row_type == 'notes':
+            if 0 <= day_index < len(self.model.notes):
+                return self.model.notes[day_index]
+            return ""
+        return ""  

@@ -1,6 +1,6 @@
 # views/delegates.py
 
-from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox
+from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QLineEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPen
 from utils.constants import (
@@ -52,6 +52,10 @@ class ScheduleDelegate(QStyledItemDelegate):
 
         row_type, data = self.controller.get_row_info(index.row())
         current = index.data(Qt.DisplayRole) or ""
+        if row_type == 'notes':
+            editor = QLineEdit(parent)
+            editor.setMaxLength(10)
+            return editor
 
         if row_type == 'employee':
             if data['category'] == CATEGORY_PERMANENT:
@@ -87,6 +91,13 @@ class ScheduleDelegate(QStyledItemDelegate):
     # ------------------------------------------------------------------
     def setEditorData(self, editor, index):
         value = index.data(Qt.DisplayRole) or ""
+
+        # Для примечаний — обычный QLineEdit, устанавливаем текст напрямую
+        if isinstance(editor, QLineEdit):
+            editor.setText(value)
+            return
+
+        # Для выпадающих списков — ищем текущее значение
         if value:
             i = editor.findText(value)
             if i >= 0:
@@ -94,8 +105,15 @@ class ScheduleDelegate(QStyledItemDelegate):
 
     # ------------------------------------------------------------------
     def setModelData(self, editor, model, index):
-        value = editor.currentText()
         row_type, data = self.controller.get_row_info(index.row())
+
+        # Для примечаний — обычный QLineEdit, берём текст
+        if row_type == 'notes':
+            value = editor.text()[:10]   # страховка на случай вставки
+            model.setData(index, value, Qt.EditRole)
+            return
+
+        value = editor.currentText()
         current = index.data(Qt.DisplayRole) or ""
 
         if row_type == 'employee':
