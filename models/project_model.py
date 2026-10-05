@@ -38,12 +38,15 @@ class ProjectModel:
     def add_employee(self, name, category):
         emp_id = self.next_id
         self.next_id += 1
-        days = [""] * self.days_in_month()
+        count = self.days_in_month()
+        days = [""] * count
+        duty_home = [False] * count
         employee = {
             "id": emp_id,
             "name": name,
             "category": category,
-            "days": days
+            "days": days,
+            "duty_home": duty_home,
         }
         self.employees.append(employee)
         self._dirty = True
@@ -64,6 +67,20 @@ class ProjectModel:
         if emp and 0 <= day_index < len(emp["days"]):
             emp["days"][day_index] = value
             self._dirty = True
+
+    def set_duty_home(self, emp_id, day_index, value):
+        """Устанавливает или снимает флаг дежурства на дому."""
+        emp = self.get_employee(emp_id)
+        if emp and 0 <= day_index < len(emp["duty_home"]):
+            emp["duty_home"][day_index] = bool(value)
+            self._dirty = True
+
+    def get_duty_home(self, emp_id, day_index):
+        """Возвращает True, если сотрудник дежурит на дому в этот день."""
+        emp = self.get_employee(emp_id)
+        if emp and 0 <= day_index < len(emp["duty_home"]):
+            return emp["duty_home"][day_index]
+        return False
 
     def set_special(self, row_key, day_index, value):
         if row_key in self.special and 0 <= day_index < len(self.special[row_key]):
@@ -105,6 +122,13 @@ class ProjectModel:
             self.notes = data["notes"]
         else:
             self.notes = [""] * self.days_in_month()
+        # duty_home: в версиях 2.0–2.1 поля не было — инициализируем False
+        count = self.days_in_month()
+        for emp in self.employees:
+            if "duty_home" not in emp or not isinstance(emp["duty_home"], list):
+                emp["duty_home"] = [False] * count
+            elif len(emp["duty_home"]) != count:
+                emp["duty_home"] = (emp["duty_home"] + [False] * count)[:count]
         self._dirty = False
 
     def is_dirty(self):

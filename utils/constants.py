@@ -31,4 +31,4 @@ MONTHS = [
 ]
 WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
-PROJECT_VERSION = "2.1"
+PROJECT_VERSION = "2.2"
