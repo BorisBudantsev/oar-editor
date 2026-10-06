@@ -122,13 +122,13 @@ class ProjectModel:
             self.notes = data["notes"]
         else:
             self.notes = [""] * self.days_in_month()
-        # duty_home: в версиях 2.0–2.1 поля не было — инициализируем False
+                # duty_home: в версиях 2.0–2.1 поля не было — инициализируем False.
+        # Если поле есть, но длина неверная — не исправляем здесь,
+        # чтобы это поймала строгая валидация в storage._validate_days_lengths.
         count = self.days_in_month()
         for emp in self.employees:
             if "duty_home" not in emp or not isinstance(emp["duty_home"], list):
                 emp["duty_home"] = [False] * count
-            elif len(emp["duty_home"]) != count:
-                emp["duty_home"] = (emp["duty_home"] + [False] * count)[:count]
         self._dirty = False
 
     def is_dirty(self):

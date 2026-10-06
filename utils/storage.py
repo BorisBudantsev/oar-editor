@@ -173,6 +173,19 @@ def _validate_days_lengths(model, target_days):
             f"В поле 'notes' длина = {len(model.notes)}, "
             f"ожидается {target_days}."
         )
+        # duty_home: у каждого сотрудника — массив bool той же длины
+    for emp in model.employees:
+        dh = emp.get("duty_home", [])
+        if not isinstance(dh, list):
+            raise ValueError(
+                f"У сотрудника «{emp.get('name', '?')}» "
+                f"поле duty_home — не список."
+            )
+        if len(dh) != target_days:
+            raise ValueError(
+                f"У сотрудника «{emp.get('name', '?')}» "
+                f"длина duty_home = {len(dh)}, ожидается {target_days}."
+            )
 
 # ----------------------------------------------------------------------
 # Диалоги

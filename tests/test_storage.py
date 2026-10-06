@@ -8,8 +8,14 @@ from utils.constants import PROJECT_VERSION
 from utils.storage import load_model_from_string
 
 
-def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor", notes=None):
-    """Собирает корректный JSON-проект."""
+def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor",
+                notes=None, duty_home_default=None):
+    """Собирает корректный JSON-проект.
+
+    duty_home_default: если передан — добавляет каждому сотруднику
+    массив duty_home указанной длины (например, [False] * days).
+    Если None — не добавляет поле (симулирует старый формат 2.1).
+    """
     if employees is None:
         employees = []
     days = calendar.monthrange(year, month + 1)[1]
@@ -17,6 +23,10 @@ def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor",
         special = {"Э": ["3"] * days, "О": ["3"] * days}
     if notes is None:
         notes = [""] * days
+    if duty_home_default is not None and employees:
+        for emp in employees:
+            if "duty_home" not in emp:
+                emp["duty_home"] = list(duty_home_default)
     return json.dumps({
         "version": PROJECT_VERSION,
         "role": role,
@@ -206,3 +216,56 @@ def test_load_too_short_notes():
     model, error = load_model_from_string(text)
     assert model is None
     assert "notes" in error.lower() or "длина" in error.lower()
+
+
+# ---------------------------------------------------------------
+# Дежурство на дому (duty_home)
+# ---------------------------------------------------------------
+
+def test_load_with_duty_home():
+    """duty_home загружается из JSON."""
+    days = calendar.monthrange(2025, 1)[1]
+    emp = {
+        "id": 1, "name": "Иванов", "category": "permanent",
+        "days": [""] * days,
+    }
+    text = _valid_json(employees=[emp], duty_home_default=[False] * days)
+    # Установим флаг в исходном JSON после сборки
+    data = json.loads(text)
+    data["employees"][0]["duty_home"][5] = True
+    data["employees"][0]["duty_home"][10] = True
+    model, error = load_model_from_string(json.dumps(data))
+    assert error == ""
+    assert model is not None
+    assert model.employees[0]["duty_home"][5] is True
+    assert model.employees[0]["duty_home"][10] is True
+    assert model.employees[0]["duty_home"][0] is False
+
+
+def test_load_without_duty_home_legacy():
+    """Файл версии 2.1 без duty_home — массив инициализируется False."""
+    days = calendar.monthrange(2025, 1)[1]
+    emp = {
+        "id": 1, "name": "Иванов", "category": "permanent",
+        "days": [""] * days,
+    }
+    # duty_home_default=None → поле НЕ добавляется
+    text = _valid_json(employees=[emp])
+    model, error = load_model_from_string(text)
+    assert error == ""
+    assert model is not None
+    assert len(model.employees[0]["duty_home"]) == days
+    assert all(x is False for x in model.employees[0]["duty_home"])
+
+
+def test_load_too_short_duty_home():
+    """Слишком короткий duty_home — ошибка загрузки."""
+    days = calendar.monthrange(2025, 1)[1]
+    emp = {
+        "id": 1, "name": "Иванов", "category": "permanent",
+        "days": [""] * days,
+    }
+    text = _valid_json(employees=[emp], duty_home_default=[False] * 5)  # 5 вместо 31
+    model, error = load_model_from_string(text)
+    assert model is None
+    assert "duty_home" in error.lower() or "длина" in error.lower()

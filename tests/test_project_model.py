@@ -142,3 +142,22 @@ def test_json_roundtrip_preserves_notes():
     assert restored.notes[5] == "болезнь"
     assert restored.notes[10] == "конференция"
     assert restored.notes[1] == ""
+
+
+def test_json_roundtrip_preserves_duty_home():
+    """Флаг дежурства на дому сохраняется и загружается без потерь."""
+    m = ProjectModel(month=0, year=2025)
+    m.add_employee("Иванов", "permanent")
+    m.set_duty_home(1, 3, True)
+    m.set_duty_home(1, 7, True)
+    m.set_duty_home(1, 15, True)
+
+    text = m.to_json()
+    restored = ProjectModel()
+    restored.from_json(text)
+
+    assert len(restored.employees[0]["duty_home"]) == 31
+    assert restored.employees[0]["duty_home"][3] is True
+    assert restored.employees[0]["duty_home"][7] is True
+    assert restored.employees[0]["duty_home"][15] is True
+    assert restored.employees[0]["duty_home"][0] is False
