@@ -12,7 +12,7 @@ from models.employee_model import EmployeeModel
 from models.autosave_model import AutosaveModel
 from controllers.project_controller import ProjectController
 from controllers import export_controller
-from controllers.undo_commands import CellEditCommand
+from controllers.undo_commands import CellEditCommand, DutyHomeCommand
 from views.delegates import ScheduleDelegate
 from views.dialogs import NewProjectWizard
 from utils.constants import MONTHS
@@ -98,7 +98,7 @@ class MainWindow(QMainWindow):
         header.setSectionsClickable(True)
         header.sectionClicked.connect(self._on_header_clicked)
         header.setContextMenuPolicy(Qt.CustomContextMenu)
-        header.customContextMenuRequested.connect(self._on_header_context_menu)
+        header.setContextMenuPolicy(Qt.NoContextMenu)
 
         # --- попытка восстановить автосохранение ---
         self._try_restore_autosave()
@@ -460,52 +460,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Контекстное меню на заголовке
     # ------------------------------------------------------------------
-    def _on_header_context_menu(self, pos):
-        from PyQt5.QtWidgets import QMenu, QMessageBox
-        header = self.table.horizontalHeader()
-        col = header.logicalIndexAt(pos)
-        if col < 2:
-            return
-
-        day_num = col - 1
-        days = self.project_model.days_in_month()
-        if not (1 <= day_num <= days):
-            return
-
-        if self.selected_days and day_num in self.selected_days:
-            target_days = sorted(self.selected_days)
-        else:
-            target_days = [day_num]
-
-        menu = QMenu(self)
-        if len(target_days) == 1:
-            act_clear = menu.addAction(f"Очистить день {target_days[0]}")
-        else:
-            act_clear = menu.addAction(
-                f"Очистить выделенные дни ({target_days[0]}–{target_days[-1]}, "
-                f"всего {len(target_days)})"
-            )
-
-        chosen = menu.exec_(header.mapToGlobal(pos))
-        if chosen != act_clear:
-            return
-
-        if len(target_days) == 1:
-            question = f"Очистить день {target_days[0]}?"
-        else:
-            question = (f"Очистить {len(target_days)} дней: "
-                        f"{target_days[0]}–{target_days[-1]}?")
-        reply = QMessageBox.question(self, "Подтверждение", question,
-                                     QMessageBox.Yes | QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
-
-        self.controller.clear_days(target_days)
-        self.selected_days = set()
-        self.last_click_day = None
-        self.controller.highlight_selected_columns(set())
-        self._refresh_validation()
-        self.statusBar().showMessage(f"Очищено дней: {len(target_days)}")
+    
 
     # ------------------------------------------------------------------
     # Контекстное меню на ячейке данных
@@ -520,12 +475,21 @@ class MainWindow(QMainWindow):
         col = index.column()
 
         menu = QMenu(self)
-        act_copy = act_paste = act_clear = None
+        act_copy = act_paste = None
+        act_duty_on = act_duty_off = None
+
         if col >= 2:
             act_copy = menu.addAction("Копировать")
             act_paste = menu.addAction("Вставить")
-            menu.addSeparator()
-            act_clear = menu.addAction("Очистить ячейку")
+
+            row_type, _ = self.controller.get_row_info(row)
+            if row_type == 'employee':
+                menu.addSeparator()
+                current_flag = self.controller.get_duty_home_at(row, col)
+                act_duty_on = menu.addAction("Дежурство на дому")
+                act_duty_off = menu.addAction("Убрать дежурство на дому")
+                act_duty_on.setEnabled(not current_flag)
+                act_duty_off.setEnabled(bool(current_flag))
 
         chosen = menu.exec_(self.table.viewport().mapToGlobal(pos))
         if chosen is None:
@@ -534,8 +498,10 @@ class MainWindow(QMainWindow):
             self._ctx_copy(row, col)
         elif chosen == act_paste:
             self._ctx_paste(row, col)
-        elif chosen == act_clear:
-            self._ctx_clear_cell(row, col)
+        elif chosen == act_duty_on:
+            self._ctx_set_duty(row, col, True)
+        elif chosen == act_duty_off:
+            self._ctx_set_duty(row, col, False)
 
     def _ctx_copy(self, row, col):
         from PyQt5.QtWidgets import QApplication
@@ -593,35 +559,30 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(cmd)
         self.statusBar().showMessage("Вставлено")
         
-    def _ctx_clear_cell(self, row, col):
-        from utils.constants import CATEGORY_PARTTIME, WORKPLACE_CODES
-
-        item = self.table.item(row, col)
-        if not item:
+    def _ctx_set_duty(self, row, col, value):
+        """Устанавливает или снимает флаг дежурства на дому через undo-стек."""
+        old = self.controller.get_duty_home_at(row, col)
+        if old is None or old == value:
             return
-
-        old_value = self.controller.get_cell_value(row, col)
-        if old_value == "":
-            return
-
-        row_type, data = self.controller.get_row_info(row)
-
-        # Для совместителя с рабочим кодом «очистить» возвращает «*»
-        # (см. RULES.md: рабочее место снимается обратно до доступности)
-        if row_type == 'employee' and data['category'] == CATEGORY_PARTTIME:
-            if old_value in WORKPLACE_CODES:
-                new_value = "*"
-            else:
-                new_value = ""
-        else:
-            new_value = ""
-
-        if old_value == new_value:
-            return
-
-        cmd = CellEditCommand(self.controller, row, col, old_value, new_value)
+        cmd = DutyHomeCommand(self.controller, row, col, old, value)
         self.undo_stack.push(cmd)
-        self.statusBar().showMessage("Ячейка очищена")
+        if value:
+            self.statusBar().showMessage("Дежурство на дому отмечено")
+        else:
+            self.statusBar().showMessage("Дежурство на дому снято")
+    def _ctx_set_duty(self, row, col, value):
+        """Устанавливает или снимает флаг дежурства на дому через undo-стек."""
+        old = self.controller.get_duty_home_at(row, col)
+        if old is None or old == value:
+            return
+        cmd = DutyHomeCommand(self.controller, row, col, old, value)
+        self.undo_stack.push(cmd)
+        if value:
+            self.statusBar().showMessage("Дежурство на дому отмечено")
+        else:
+            self.statusBar().showMessage("Дежурство на дому снято")
+        
+    
     # ------------------------------------------------------------------
     # Автосохранение
     # ------------------------------------------------------------------

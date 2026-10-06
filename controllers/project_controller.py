@@ -7,9 +7,12 @@ from PyQt5.QtGui import QFont, QBrush, QColor
 from utils.constants import CATEGORY_PERMANENT, CATEGORY_PARTTIME, WORKPLACE_CODES
 
 
-COLOR_WEEKEND = QColor(219, 219, 219)
-COLOR_WEEKDAY = QColor(255, 255, 255)
-COLOR_ERROR = QColor(255, 180, 180)
+# Палитра ячеек таблицы (различается в ч/б печати по яркости)
+COLOR_WEEKDAY = QColor(255, 255, 255)         # будни без Д — белый
+COLOR_WEEKEND = QColor(204, 204, 204)         # выходной без Д (или будни с Д) — средний серый
+COLOR_DUTY_WEEKEND = QColor(150, 150, 150)    # выходной с Д — тёмно-серый
+COLOR_ERROR = QColor(255, 180, 180)           # ошибка без Д — светло-розовый
+COLOR_ERROR_DUTY = QColor(192, 96, 96)        # ошибка с Д — тёмно-красный
 
 
 class ProjectController:
@@ -172,7 +175,12 @@ class ProjectController:
         self.table.viewport().update()
 
     def _paint_columns(self, error_map):
-        """Общий метод: применяет фон и tooltip к столбцам дней.
+        """Применяет фон и tooltip к столбцам дней.
+
+        Фон ячейки зависит от:
+          - наличия ошибки в столбце (error_map),
+          - будний/выходной день,
+          - флага duty_home у конкретного сотрудника в этот день.
 
         error_map: {номер дня: [строки]} — только для проблемных дней.
         """
@@ -183,83 +191,52 @@ class ProjectController:
             wd = calendar.weekday(model.year, model.month + 1, day)
             is_weekend = wd in (5, 6)
             col = day + 1
+            day_index = day - 1
 
             messages = error_map.get(day, [])
             has_error = bool(messages)
             tooltip = "\n".join(messages) if has_error else ""
 
+            # Цвет для заголовка столбца (без учёта duty_home — он per-employee)
             if has_error:
-                color = COLOR_ERROR
+                header_color = COLOR_ERROR
             elif is_weekend:
-                color = COLOR_WEEKEND
+                header_color = COLOR_WEEKEND
             else:
-                color = COLOR_WEEKDAY
-
-            brush = QBrush(color)
+                header_color = COLOR_WEEKDAY
 
             h_item = self.table.horizontalHeaderItem(col)
             if h_item is not None:
-                h_item.setBackground(brush)
+                h_item.setBackground(QBrush(header_color))
                 h_item.setToolTip(tooltip)
 
+            # Каждая ячейка — свой цвет
             for row in range(self.table.rowCount()):
                 item = self.table.item(row, col)
-                if item is not None:
-                    item.setBackground(brush)
-                    item.setToolTip(tooltip)
+                if item is None:
+                    continue
 
+                row_type, data = self.get_row_info(row)
+                is_duty = False
+                if row_type == 'employee':
+                    is_duty = data['duty_home'][day_index]
+
+                if has_error:
+                    color = COLOR_ERROR_DUTY if is_duty else COLOR_ERROR
+                elif is_weekend:
+                    color = COLOR_DUTY_WEEKEND if is_duty else COLOR_WEEKEND
+                else:
+                    color = COLOR_WEEKEND if is_duty else COLOR_WEEKDAY
+
+                item.setBackground(QBrush(color))
+                item.setToolTip(tooltip)
     # ------------------------------------------------------------------
     def get_row_info(self, row):
         if 0 <= row < len(self.row_map):
             return self.row_map[row]
         return (None, None)
         # ------------------------------------------------------------------
-    # Очистка дней (только сотрудники)
-    # ------------------------------------------------------------------
-    def clear_days(self, day_numbers):
-        """Очищает назначения сотрудников в указанных днях (1-based).
-
-        Для постоянных — пустая строка.
-        Для совместителей:
-          - рабочий код → «*» (снять рабочее место, но оставить доступность);
-          - «*» → пустая строка (полностью убрать доступность);
-          - пустая строка → остаётся пустой.
-        Служебные строки «Э» и «О» не трогаются.
-        """
-        days = self.model.days_in_month()
-
-        # 1. Обновляем модель
-        for emp in self.model.employees:
-            is_parttime = emp['category'] == CATEGORY_PARTTIME
-            for d in day_numbers:
-                idx = d - 1
-                if not (0 <= idx < days):
-                    continue
-                current = emp["days"][idx]
-                if is_parttime and current in WORKPLACE_CODES:
-                    emp["days"][idx] = "*"
-                else:
-                    emp["days"][idx] = ""
-
-        self.model._dirty = True
-
-        # 2. Обновляем таблицу без сигналов — читаем актуальное значение из модели
-        self.table.blockSignals(True)
-        for row, (row_type, data) in enumerate(self.row_map):
-            if row_type != 'employee':
-                continue
-            for d in day_numbers:
-                col = d + 1  # 0=№, 1=ФИО, 2=день1 → колонка дня N = N+1
-                idx = d - 1
-                if not (0 <= idx < days):
-                    continue
-                item = self.table.item(row, col)
-                if item is not None:
-                    item.setText(data["days"][idx])
-        self.table.blockSignals(False)
-
-        # Уведомляем MainWindow: перезапуск валидации + автосохранение
-        self.on_model_changed()
+    
 
     # ------------------------------------------------------------------
     # Выделение столбцов
@@ -298,6 +275,42 @@ class ProjectController:
             self.model.set_special(data, day_index, value)
         elif row_type == 'notes':
             self.model.set_note(day_index, value)
+
+    def get_duty_home_at(self, row, col):
+        """Возвращает флаг дежурства на дому для ячейки.
+
+        Возвращает None, если ячейка не относится к сотруднику
+        или индексы вне диапазона.
+        """
+        if col < 2:
+            return None
+        day_index = col - 2
+        row_type, data = self.get_row_info(row)
+        if row_type != 'employee':
+            return None
+        if 0 <= day_index < len(data['duty_home']):
+            return data['duty_home'][day_index]
+        return None
+
+    def set_duty_home_at(self, row, col, value):
+        """Устанавливает флаг дежурства на дому для ячейки.
+
+        Возвращает True, если значение изменилось.
+        """
+        if col < 2:
+            return False
+        day_index = col - 2
+        row_type, data = self.get_row_info(row)
+        if row_type != 'employee':
+            return False
+        if not (0 <= day_index < len(data['duty_home'])):
+            return False
+        value = bool(value)
+        if data['duty_home'][day_index] == value:
+            return False
+        data['duty_home'][day_index] = value
+        self.model._dirty = True
+        return True
 
     def _adjust_cell_fonts(self):
         base = QFont()

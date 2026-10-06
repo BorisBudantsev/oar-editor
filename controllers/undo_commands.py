@@ -34,3 +34,25 @@ class CellEditCommand(QUndoCommand):
 
     def undo(self):
         self._apply(self.old_value)
+
+class DutyHomeCommand(QUndoCommand):
+    """Duty at home command."""
+
+    def __init__(self, controller, row, col, old_value, new_value,
+                 description="Duty at home"):
+        super().__init__(description)
+        self.controller = controller
+        self.row = row
+        self.col = col
+        self.old_value = bool(old_value)
+        self.new_value = bool(new_value)
+
+    def _apply(self, value):
+        self.controller.set_duty_home_at(self.row, self.col, value)
+        self.controller.on_model_changed()
+
+    def redo(self):
+        self._apply(self.new_value)
+
+    def undo(self):
+        self._apply(self.old_value)
