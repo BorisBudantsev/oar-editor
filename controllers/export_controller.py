@@ -61,7 +61,8 @@ def build_html(model, scale=8):
     th {{ background-color: #f0f0f0; font-weight: bold; }}
     td.name {{ text-align: left; padding-left: 6px; white-space: nowrap; }}
     td.num {{ width: 30px; }}
-    .weekend {{ background-color: #dbdbdb; }}
+    .shade {{ background-color: #CCCCCC; }}
+    .duty-dark {{ background-color: #969696; }}
     .border-after td {{ border-bottom: 3px solid #333; }}
     .special-label {{ font-weight: bold; }}
     </style>
@@ -77,7 +78,7 @@ def build_html(model, scale=8):
     parts.append("<thead><tr>")
     parts.append("<th>№</th><th>ФИО</th>")
     for d in range(1, days + 1):
-        cls = "weekend" if d in weekend else ""
+        cls = "shade" if d in weekend else ""
         wd = calendar.weekday(data['year'], data['month'] + 1, d)
         parts.append(f"<th class='{cls}'>{d}<br>{WEEKDAY_SHORT[wd]}</th>")
     parts.append("</tr></thead><tbody>")
@@ -87,9 +88,17 @@ def build_html(model, scale=8):
         parts.append(f"<tr class='{row_cls}'>")
         parts.append(f"<td class='num'>{idx + 1}</td>")
         parts.append(f"<td class='name'>{emp['name']}</td>")
+        duty_home = emp.get('duty_home', [])
         for day in range(days):
             value = emp['days'][day] if day < len(emp['days']) else ""
-            cls = "weekend" if (day + 1) in weekend else ""
+            is_weekend = (day + 1) in weekend
+            is_duty = day < len(duty_home) and duty_home[day]
+            if is_duty and is_weekend:
+                cls = "duty-dark"
+            elif is_duty or is_weekend:
+                cls = "shade"
+            else:
+                cls = ""
             parts.append(f"<td class='{cls}'>{value}</td>")
         parts.append("</tr>")
 
@@ -99,7 +108,7 @@ def build_html(model, scale=8):
         parts.append(f"<td class='special-label'>{key}</td>")
         for day in range(days):
             value = values[day] if day < len(values) else ""
-            cls = "weekend" if (day + 1) in weekend else ""
+            cls = "shade" if (day + 1) in weekend else ""
             parts.append(f"<td class='{cls}'>{value}</td>")
         parts.append("</tr>")
             # Строка примечаний
@@ -108,7 +117,7 @@ def build_html(model, scale=8):
     parts.append("<td></td><td></td>")
     for day in range(days):
         value = notes[day] if day < len(notes) else ""
-        cls = "weekend" if (day + 1) in weekend else ""
+        cls = "shade" if (day + 1) in weekend else ""
         parts.append(f"<td class='{cls}'>{value}</td>")
     parts.append("</tr>")
 
@@ -165,7 +174,8 @@ def export_excel(parent, model, scale=8):
         thick = Side(border_style="medium", color="333333")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
         border_thick_bottom = Border(left=thin, right=thin, top=thin, bottom=thick)
-        weekend_fill = PatternFill(start_color="DBDBDB", end_color="DBDBDB", fill_type="solid")
+        weekend_fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        duty_dark_fill = PatternFill(start_color="969696", end_color="969696", fill_type="solid")
         header_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
         center = Alignment(horizontal="center", vertical="center")
         left = Alignment(horizontal="left", vertical="center")
@@ -203,14 +213,23 @@ def export_excel(parent, model, scale=8):
                 c = ws.cell(row=row, column=3 + day, value=value)
                 c.alignment = center
 
+                duty_home = emp.get('duty_home', [])
             for c in range(1, days + 3):
                 cell = ws.cell(row=row, column=c)
                 if idx == data['last_permanent_idx']:
                     cell.border = border_thick_bottom
                 else:
                     cell.border = border
-                if (c - 2) in weekend:
-                    cell.fill = weekend_fill
+
+                day_num = c - 2
+                if 1 <= day_num <= days:
+                    day_idx = day_num - 1
+                    is_weekend = day_num in weekend
+                    is_duty = day_idx < len(duty_home) and duty_home[day_idx]
+                    if is_duty and is_weekend:
+                        cell.fill = duty_dark_fill
+                    elif is_duty or is_weekend:
+                        cell.fill = weekend_fill
             row += 1
 
         for key, values in data['special'].items():
