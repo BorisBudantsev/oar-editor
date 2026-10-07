@@ -269,3 +269,19 @@ def test_load_too_short_duty_home():
     model, error = load_model_from_string(text)
     assert model is None
     assert "duty_home" in error.lower() or "длина" in error.lower()
+def test_load_v21_file_in_v22():
+    """Файл версии 2.1 открывается в 2.2 с миграцией duty_home."""
+    days = calendar.monthrange(2025, 1)[1]
+    emp = {
+        "id": 1, "name": "Иванов", "category": "permanent",
+        "days": [""] * days,
+    }
+    data = json.loads(_valid_json(employees=[emp]))
+    data["version"] = "2.1"
+    if "duty_home" in data["employees"][0]:
+        del data["employees"][0]["duty_home"]
+    model, error = load_model_from_string(json.dumps(data))
+    assert error == ""
+    assert model is not None
+    assert len(model.employees[0]["duty_home"]) == days
+    assert all(x is False for x in model.employees[0]["duty_home"])

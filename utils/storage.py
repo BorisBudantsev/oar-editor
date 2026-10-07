@@ -3,7 +3,7 @@
 import json
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from models.project_model import ProjectModel
-from utils.constants import PROJECT_VERSION
+from utils.constants import PROJECT_VERSION, SUPPORTED_VERSIONS
 from app_config import ROLE, get
 
 
@@ -70,9 +70,14 @@ def load_model_from_file(file_path):
     version = data.get("version")
     if version is None:
         return None, "В файле отсутствует поле 'version'."
-    if version != PROJECT_VERSION:
-        return None, (f"Несовместимая версия файла.\n\n"
-                      f"Файл: {version}\nПрограмма ожидает: {PROJECT_VERSION}")
+    if version not in SUPPORTED_VERSIONS:
+        supported = ", ".join(SUPPORTED_VERSIONS)
+        return None, (
+            f"Несовместимая версия файла.\n\n"
+            f"Файл: {version}\n"
+            f"Поддерживаемые версии: {supported}\n"
+            f"Актуальная: {PROJECT_VERSION}"
+        )
         # 3.1. Проверка роли
     file_role = data.get("role", "doctor")   # старые файлы без role = doctor
     if file_role != ROLE:
@@ -227,9 +232,12 @@ def _validate_and_build(text, data):
     version = data.get("version")
     if version is None:
         return None, "Отсутствует поле 'version'."
-    if version != PROJECT_VERSION:
-        return None, (f"Несовместимая версия: {version}. "
-                      f"Ожидается {PROJECT_VERSION}.")
+    if version not in SUPPORTED_VERSIONS:
+        supported = ", ".join(SUPPORTED_VERSIONS)
+        return None, (
+            f"Несовместимая версия: {version}. "
+            f"Поддерживаемые: {supported}. Актуальная: {PROJECT_VERSION}."
+        )
         # Проверка роли
     file_role = data.get("role", "doctor")
     if file_role != ROLE:
