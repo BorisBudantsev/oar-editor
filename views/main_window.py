@@ -504,7 +504,8 @@ class MainWindow(QMainWindow):
     def _ctx_paste(self, row, col):
         from PyQt5.QtWidgets import QApplication
         from utils.constants import (
-            CODES_OPERATION, CODES_ENDO, SPECIAL_VALUES,
+            CODES_OPERATION, CODES_ENDO,
+            SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER,
             CATEGORY_PERMANENT, CATEGORY_PARTTIME,
         )
 
@@ -532,7 +533,10 @@ class MainWindow(QMainWindow):
                 else:  # current — рабочий код
                     allowed = set(list(CODES_OPERATION) + list(CODES_ENDO) + ["Д", "*"])
         elif row_type == 'special':
-            allowed = set(list(SPECIAL_VALUES) + [""])
+            if data == "Э":
+                allowed = set(list(SPECIAL_VALUES_ENDO) + [""])
+            else:
+                allowed = set(list(SPECIAL_VALUES_OPER) + [""])
         else:
             return
 
@@ -550,17 +554,6 @@ class MainWindow(QMainWindow):
         self.undo_stack.push(cmd)
         self.statusBar().showMessage("Вставлено")
         
-    def _ctx_set_duty(self, row, col, value):
-        """Устанавливает или снимает флаг дежурства на дому через undo-стек."""
-        old = self.controller.get_duty_home_at(row, col)
-        if old is None or old == value:
-            return
-        cmd = DutyHomeCommand(self.controller, row, col, old, value)
-        self.undo_stack.push(cmd)
-        if value:
-            self.statusBar().showMessage("Дежурство на дому отмечено")
-        else:
-            self.statusBar().showMessage("Дежурство на дому снято")
     def _ctx_set_duty(self, row, col, value):
         """Устанавливает или снимает флаг дежурства на дому через undo-стек."""
         old = self.controller.get_duty_home_at(row, col)
