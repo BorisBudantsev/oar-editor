@@ -326,13 +326,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def _flush_autosave(self):
-        """Принудительно сбрасывает отложенный автосейв (при закрытии окна)."""
-        if self._autosave_timer.isActive():
-            self._autosave_timer.stop()
-            self._do_autosave()
-    # ------------------------------------------------------------------
-    # Валидация и автосохранение
+       # Валидация и автосохранение
     # ------------------------------------------------------------------
     def _refresh_validation(self):
         errors = check_schedule(self.project_model)
@@ -457,9 +451,6 @@ class MainWindow(QMainWindow):
             text = f"Выделено дней: {len(days)} ({days[0]}–{days[-1]})"
         self.statusBar().showMessage(text)
 
-    # ------------------------------------------------------------------
-    # Контекстное меню на заголовке
-    # ------------------------------------------------------------------
     
 
     # ------------------------------------------------------------------
@@ -616,9 +607,8 @@ class MainWindow(QMainWindow):
     # Закрытие окна
     # ------------------------------------------------------------------
     def closeEvent(self, event):
-        # принудительно сбросим отложенный автосейв
-        # чтобы последние изменения не потерялись, если пользователь закрыл окно сразу
-        self._flush_autosave()
+        # Если несохранённых изменений нет — закрываем без диалога.
+        # Автосейв не трогаем: он хранит последнее рабочее состояние.
         if not self.project_model.is_dirty():
             event.accept()
             return
@@ -633,11 +623,14 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Save:
             self.save_project()
             if self.project_model.is_dirty():
+                # Сохранить не удалось (отмена выбора файла или ошибка)
                 event.ignore()
                 return
             event.accept()
         elif reply == QMessageBox.Discard:
+            # Пользователь явно отказался от изменений — очищаем автосейв,
+            # чтобы при следующем запуске не предлагать восстановить отвергнутое.
+            AutosaveModel.clear()
             event.accept()
         else:
             event.ignore()
-      
