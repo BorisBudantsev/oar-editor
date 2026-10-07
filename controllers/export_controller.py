@@ -1,6 +1,7 @@
 # controllers/export_controller.py
 
 import calendar
+import html
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtGui import QTextDocument
@@ -72,7 +73,7 @@ def build_html(model, scale=8):
     y = data['year']
     title = f"{get('app_title')} · {m} {y}"
     parts = [f"<html><head><meta charset='utf-8'>{css}</head><body>"]
-    parts.append(f"<h1>{title}</h1>")
+    parts.append(f"<h1>{html.escape(title)}</h1>")
     parts.append("<table>")
 
     parts.append("<thead><tr>")
@@ -87,7 +88,7 @@ def build_html(model, scale=8):
         row_cls = "border-after" if idx == data['last_permanent_idx'] else ""
         parts.append(f"<tr class='{row_cls}'>")
         parts.append(f"<td class='num'>{idx + 1}</td>")
-        parts.append(f"<td class='name'>{emp['name']}</td>")
+        parts.append(f"<td class='name'>{html.escape(emp['name'])}</td>") 
         duty_home = emp.get('duty_home', [])
         for day in range(days):
             value = emp['days'][day] if day < len(emp['days']) else ""
@@ -99,7 +100,7 @@ def build_html(model, scale=8):
                 cls = "shade"
             else:
                 cls = ""
-            parts.append(f"<td class='{cls}'>{value}</td>")
+            parts.append(f"<td class='{cls}'>{html.escape(value)}</td>")
         parts.append("</tr>")
 
     for key, values in data['special'].items():
@@ -109,7 +110,7 @@ def build_html(model, scale=8):
         for day in range(days):
             value = values[day] if day < len(values) else ""
             cls = "shade" if (day + 1) in weekend else ""
-            parts.append(f"<td class='{cls}'>{value}</td>")
+            parts.append(f"<td class='{cls}'>{html.escape(value)}</td>")
         parts.append("</tr>")
             # Строка примечаний
     notes = data.get('notes', [])
@@ -118,7 +119,7 @@ def build_html(model, scale=8):
     for day in range(days):
         value = notes[day] if day < len(notes) else ""
         cls = "shade" if (day + 1) in weekend else ""
-        parts.append(f"<td class='{cls}'>{value}</td>")
+        parts.append(f"<td class='{cls}'>{html.escape(value)}</td>")
     parts.append("</tr>")
 
     parts.append("</tbody></table></body></html>")
@@ -452,7 +453,7 @@ def build_stats_html(model, report, scale=8):
     )
     for r in report["employees"]:
         parts.append("<tr>")
-        parts.append(f"<td class='name'>{r['name']}</td>")
+        parts.append(f"<td class='name'>{html.escape(r['name'])}</td>") 
         parts.append(f"<td>{_category_ru(r['category'])}</td>")
         parts.append(f"<td>{r['work']}</td>")
         parts.append(f"<td>{_fmt_cell(r['vyh'])}</td>")
@@ -479,7 +480,7 @@ def build_stats_html(model, report, scale=8):
         parts.append("<table>")
         parts.append("<tr><th>Сотрудник</th><th>Значение</th></tr>")
         for name, val in rows:
-            parts.append(f"<tr><td class='name'>{name}</td><td>{val}</td></tr>")
+            parts.append(f"<tr><td class='name'>{html.escape(str(name))}</td><td>{html.escape(str(val))}</td></tr>")
         parts.append("</table>")
 
     # --- Раздел 3: Общий итог ---
