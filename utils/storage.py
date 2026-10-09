@@ -1,6 +1,7 @@
 # utils/storage.py
 
 import json
+import os
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from models.project_model import ProjectModel
 from utils.constants import PROJECT_VERSION, SUPPORTED_VERSIONS
@@ -10,25 +11,55 @@ from app_config import ROLE, get
 # ----------------------------------------------------------------------
 # Сохранение
 # ----------------------------------------------------------------------
+def _cleanup_tmp(tmp_path):
+    """Удаляет временный файл, если он остался после ошибки."""
+    try:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except OSError:
+        pass
+
+
 def save_model_to_file(model, file_path):
-    """Сохраняет модель в JSON-файл. Возвращает True при успехе."""
+    """Сохраняет модель в JSON-файл атомарно. Возвращает True при успехе.
+
+    Запись идёт во временный файл рядом с целевым, затем os.replace
+    атомарно подменяет целевой файл. Если что-то пойдёт не так на любом
+    этапе (включая отключение питания), старый файл останется целым.
+    """
+    # 1. Сериализация — если тут ошибка, целевой файл вообще не трогаем
     try:
         data = model.to_json()
-        with open(file_path, "w", encoding="utf-8") as f:
+    except Exception as e:
+        QMessageBox.critical(None, "Ошибка сохранения",
+            f"Не удалось подготовить данные для сохранения:\n{e}")
+        return False
+
+    tmp_path = file_path + ".tmp"
+    try:
+        # 2. Пишем во временный файл рядом с целевым
+        with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        # 3. Атомарная подмена. На NTFS и большинстве ФС это одна операция.
+        os.replace(tmp_path, file_path)
         return True
     except PermissionError:
         QMessageBox.critical(None, "Ошибка доступа",
             f"Нет прав на запись в файл:\n{file_path}\n\n"
             "Возможно, файл открыт в другой программе.")
+        _cleanup_tmp(tmp_path)
         return False
     except OSError as e:
         QMessageBox.critical(None, "Ошибка файла",
             f"Не удалось записать файл:\n{e}")
+        _cleanup_tmp(tmp_path)
         return False
     except Exception as e:
         QMessageBox.critical(None, "Ошибка сохранения",
             f"Не удалось сохранить файл:\n{e}")
+        _cleanup_tmp(tmp_path)
         return False
 
 
