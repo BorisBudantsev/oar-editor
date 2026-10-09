@@ -87,17 +87,35 @@ def load_model_from_file(file_path):
     except OSError as e:
         return None, f"Ошибка чтения файла:\n{e}"
 
-    # 2. Парсинг JSON
+    # 2. Парсинг JSON и валидация — общая с load_model_from_string
+    return load_model_from_string(text)
+
+
+def load_model_from_string(text):
+    """Загружает модель из строки JSON (та же валидация, что и для файла).
+
+    Возвращает (model, message)."""
+    # 1. Парсинг JSON
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
         return None, (f"Файл повреждён или не является JSON:\n{e}\n\n"
                       f"Строка {e.lineno}, позиция {e.colno}.")
 
+    # 2. Общая валидация структуры и сборка модели
+    return _validate_and_build(text, data)
+
+
+def _validate_and_build(text, data):
+    """Общая валидация структуры и сборка ProjectModel.
+
+    Используется и при загрузке из файла, и при загрузке из строки.
+    """
+    # 1. Корневой элемент — объект
     if not isinstance(data, dict):
         return None, "Неверная структура: корневой элемент должен быть объектом."
 
-    # 3. Проверка версии
+    # 2. Версия
     version = data.get("version")
     if version is None:
         return None, "В файле отсутствует поле 'version'."
@@ -109,8 +127,9 @@ def load_model_from_file(file_path):
             f"Поддерживаемые версии: {supported}\n"
             f"Актуальная: {PROJECT_VERSION}"
         )
-        # 3.1. Проверка роли
-    file_role = data.get("role", "doctor")   # старые файлы без role = doctor
+
+    # 3. Роль: старые файлы без role считаются врачебными (doctor)
+    file_role = data.get("role", "doctor")
     if file_role != ROLE:
         file_role_name = "врачей" if file_role == "doctor" else "медицинских сестёр"
         current_role_name = "врачей" if ROLE == "doctor" else "медицинских сестёр"
@@ -126,7 +145,7 @@ def load_model_from_file(file_path):
     if missing:
         return None, f"В файле отсутствуют обязательные поля: {', '.join(missing)}"
 
-    # 5. Проверка типов и значений
+    # 5. Типы и значения
     month = data["month"]
     year = data["year"]
     employees = data["employees"]
@@ -144,14 +163,14 @@ def load_model_from_file(file_path):
     if not isinstance(next_id, int) or next_id < 1:
         return None, f"Некорректное значение nextId: {next_id}."
 
-    # 6. Проверка special
+    # 6. Поля «Э» и «О» в special
     for key in ("Э", "О"):
         if key not in special:
             return None, f"В поле 'special' отсутствует ключ «{key}»."
         if not isinstance(special[key], list):
             return None, f"Поле 'special.{key}' должно быть списком."
 
-    # 7. Проверка сотрудников
+    # 7. Сотрудники
     for i, emp in enumerate(employees):
         if not isinstance(emp, dict):
             return None, f"Сотрудник #{i + 1} — не объект."
@@ -161,14 +180,14 @@ def load_model_from_file(file_path):
         if not isinstance(emp["days"], list):
             return None, f"У сотрудника «{emp.get('name', i + 1)}» поле 'days' не список."
 
-    # 8. Создаём модель через обычный from_json (структура проверена)
+    # 8. Сборка модели
     model = ProjectModel()
     try:
         model.from_json(text)
     except Exception as e:
         return None, f"Ошибка разбора данных:\n{e}"
 
-    # 9. Проверяем длину массивов (без молчаливого исправления)
+    # 9. Строгая проверка длин массивов
     target_days = model.days_in_month()
     try:
         _validate_days_lengths(model, target_days)
@@ -179,7 +198,8 @@ def load_model_from_file(file_path):
 
 
 def _validate_days_lengths(model, target_days):
-    """Проверяет, что длины массивов days и special равны target_days.
+    """Проверяет, что длины массивов days / special / notes / duty_home
+    равны target_days.
 
     При несоответствии возбуждает ValueError — молчаливое исправление
     повреждённых данных недопустимо для медицинского графика.
@@ -194,14 +214,13 @@ def _validate_days_lengths(model, target_days):
 
     for key, values in model.special.items():
         if not isinstance(values, list):
-            raise ValueError(
-                f"Служебная строка «{key}» — не список."
-            )
+            raise ValueError(f"Служебная строка «{key}» — не список.")
         if len(values) != target_days:
             raise ValueError(
                 f"В служебной строке «{key}» длина = {len(values)}, "
                 f"ожидается {target_days}."
             )
+
     if not isinstance(model.notes, list):
         raise ValueError("Поле 'notes' — не список.")
     if len(model.notes) != target_days:
@@ -209,7 +228,7 @@ def _validate_days_lengths(model, target_days):
             f"В поле 'notes' длина = {len(model.notes)}, "
             f"ожидается {target_days}."
         )
-        # duty_home: у каждого сотрудника — массив bool той же длины
+
     for emp in model.employees:
         dh = emp.get("duty_home", [])
         if not isinstance(dh, list):
@@ -223,106 +242,21 @@ def _validate_days_lengths(model, target_days):
                 f"длина duty_home = {len(dh)}, ожидается {target_days}."
             )
 
+
 # ----------------------------------------------------------------------
 # Диалоги
 # ----------------------------------------------------------------------
 def ask_save_path(parent, default_name="project.json"):
     path, _ = QFileDialog.getSaveFileName(
-        parent, "Сохранить проект", default_name, "График ОАР (*.json);;Все файлы (*)"
+        parent, "Сохранить проект", default_name,
+        "График ОАР (*.json);;Все файлы (*)"
     )
     return path if path else None
 
 
 def ask_open_path(parent):
     path, _ = QFileDialog.getOpenFileName(
-        parent, "Открыть проект", "", "График ОАР (*.json);;Все файлы (*)"
+        parent, "Открыть проект", "",
+        "График ОАР (*.json);;Все файлы (*)"
     )
     return path if path else None
-def load_model_from_string(text):
-    """Загружает модель из строки JSON (та же валидация, что и для файла).
-
-    Возвращает (model, message)."""
-    import json
-    # Обёртка: пишем текст во временную переменную и переиспользуем логику
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError as e:
-        return None, f"JSON повреждён: {e}"
-
-    # Полная валидация — та же, что при загрузке из файла.
-    # Для повторного использования обернём текст в BytesIO и вызовем
-    # внутреннюю проверку.
-    return _validate_and_build(text, data)
-
-
-def _validate_and_build(text, data):
-    """Внутренняя: применяет те же проверки, что load_model_from_file."""
-    if not isinstance(data, dict):
-        return None, "Неверная структура: корень должен быть объектом."
-
-    version = data.get("version")
-    if version is None:
-        return None, "Отсутствует поле 'version'."
-    if version not in SUPPORTED_VERSIONS:
-        supported = ", ".join(SUPPORTED_VERSIONS)
-        return None, (
-            f"Несовместимая версия: {version}. "
-            f"Поддерживаемые: {supported}. Актуальная: {PROJECT_VERSION}."
-        )
-        # Проверка роли
-    file_role = data.get("role", "doctor")
-    if file_role != ROLE:
-        file_role_name = "врачей" if file_role == "doctor" else "медицинских сестёр"
-        current_role_name = "врачей" if ROLE == "doctor" else "медицинских сестёр"
-        return None, (
-            f"Этот файл создан для графика дежурств {file_role_name}.\n\n"
-            f"Текущее приложение работает с графиком {current_role_name}.\n"
-            f"Откройте файл в соответствующем приложении."
-        )
-
-    required = ["month", "year", "employees", "special", "nextId"]
-    missing = [k for k in required if k not in data]
-    if missing:
-        return None, f"Отсутствуют поля: {', '.join(missing)}"
-
-    month = data["month"]
-    year = data["year"]
-    if not isinstance(month, int) or not (0 <= month <= 11):
-        return None, f"Некорректный месяц: {month}"
-    if not isinstance(year, int) or not (1900 <= year <= 2200):
-        return None, f"Некорректный год: {year}"
-    if not isinstance(data["employees"], list):
-        return None, "employees не список"
-    if not isinstance(data["special"], dict):
-        return None, "special не объект"
-    if not isinstance(data["nextId"], int) or data["nextId"] < 1:
-        return None, "Некорректный nextId"
-
-    for key in ("Э", "О"):
-        if key not in data["special"]:
-            return None, f"special не содержит «{key}»"
-        if not isinstance(data["special"][key], list):
-            return None, f"special.{key} не список"
-
-    for i, emp in enumerate(data["employees"]):
-        if not isinstance(emp, dict):
-            return None, f"Сотрудник #{i + 1} не объект"
-        for f in ("id", "name", "category", "days"):
-            if f not in emp:
-                return None, f"У сотрудника #{i + 1} нет поля '{f}'"
-        if not isinstance(emp["days"], list):
-            return None, f"У сотрудника «{emp.get('name', i + 1)}» days не список"
-
-    from models.project_model import ProjectModel
-    model = ProjectModel()
-    try:
-        model.from_json(text)
-    except Exception as e:
-        return None, f"Ошибка разбора: {e}"
-
-    target = model.days_in_month()
-    try:
-        _validate_days_lengths(model, target)
-    except ValueError as e:
-        return None, f"Повреждённый файл: {e}"
-    return model, ""
