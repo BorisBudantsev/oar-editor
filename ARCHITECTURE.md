@@ -34,7 +34,8 @@
 OAR_Editor/
 ├── main.py точка входа
 ├── requirements.txt зависимости
-├── OAR_Editor.spec конфигурация сборки PyInstaller
+├── OAR_Doctors.spec конфигурация сборки PyInstaller для врачей
+├── OAR_Nurses.spec конфигурация сборки PyInstaller для медсестёр
 ├── README.md инструкция пользователя
 ├── CHANGELOG.md история изменений
 ├── ARCHITECTURE.md этот документ
@@ -112,7 +113,7 @@ OAR_Editor/
 
 ```json
 {
-  "version": "1.0",
+  "version": "2.2",
   "month": 8,
   "year": 2026,
   "employees": [
