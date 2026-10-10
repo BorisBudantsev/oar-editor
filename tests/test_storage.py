@@ -285,3 +285,21 @@ def test_load_v21_file_in_v22():
     assert model is not None
     assert len(model.employees[0]["duty_home"]) == days
     assert all(x is False for x in model.employees[0]["duty_home"])
+def test_load_v10_file():
+    """Файл версии 1.0 (без поля role) открывается и мигрирует в 2.2.
+
+    Регрессионный тест на обратную совместимость: SUPPORTED_VERSIONS
+    должен включать "1.0", а from_json — подставлять role="doctor".
+    """
+    days = calendar.monthrange(2025, 1)[1]
+    emp = {"id": 1, "name": "Иванов", "category": "permanent",
+           "days": [""] * days}
+    data = json.loads(_valid_json(employees=[emp]))
+    data["version"] = "1.0"
+    del data["role"]   # в формате 1.0 поля role не было
+    model, error = load_model_from_string(json.dumps(data, ensure_ascii=False))
+    assert error == ""
+    assert model is not None
+    assert model.role == "doctor"
+    assert model.get_employee_count() == 1
+    assert model.employees[0]["name"] == "Иванов"
