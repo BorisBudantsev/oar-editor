@@ -67,3 +67,5 @@ desktop.ini
 *.bak
 # pytest
 .pytest_cache/
+# Логи приложения
+data/logs/

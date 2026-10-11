@@ -1,11 +1,15 @@
 # utils/storage.py
 
 import json
+import logging
 import os
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from models.project_model import ProjectModel
 from utils.constants import PROJECT_VERSION, SUPPORTED_VERSIONS
 from app_config import ROLE, get
+
+
+logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
@@ -31,6 +35,7 @@ def save_model_to_file(model, file_path):
     try:
         data = model.to_json()
     except Exception as e:
+        logger.exception("Ошибка подготовки данных для сохранения: %s", e)
         QMessageBox.critical(None, "Ошибка сохранения",
             f"Не удалось подготовить данные для сохранения:\n{e}")
         return False
@@ -44,19 +49,23 @@ def save_model_to_file(model, file_path):
             os.fsync(f.fileno())
         # 3. Атомарная подмена. На NTFS и большинстве ФС это одна операция.
         os.replace(tmp_path, file_path)
+        logger.info("Проект сохранён: %s", file_path)
         return True
-    except PermissionError:
+    except PermissionError as e:
+        logger.exception("Нет прав на запись: %s", file_path)
         QMessageBox.critical(None, "Ошибка доступа",
             f"Нет прав на запись в файл:\n{file_path}\n\n"
             "Возможно, файл открыт в другой программе.")
         _cleanup_tmp(tmp_path)
         return False
     except OSError as e:
+        logger.exception("Ошибка записи файла: %s", file_path)
         QMessageBox.critical(None, "Ошибка файла",
             f"Не удалось записать файл:\n{e}")
         _cleanup_tmp(tmp_path)
         return False
     except Exception as e:
+        logger.exception("Ошибка сохранения проекта: %s", file_path)
         QMessageBox.critical(None, "Ошибка сохранения",
             f"Не удалось сохранить файл:\n{e}")
         _cleanup_tmp(tmp_path)
@@ -78,17 +87,30 @@ def load_model_from_file(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             text = f.read()
     except FileNotFoundError:
+        logger.error("Файл не найден: %s", file_path)
         return None, f"Файл не найден:\n{file_path}"
     except PermissionError:
+        logger.error("Нет прав на чтение: %s", file_path)
         return None, f"Нет прав на чтение файла:\n{file_path}"
     except UnicodeDecodeError:
+        logger.error("Файл не является текстовым JSON: %s", file_path)
         return None, ("Файл не является текстовым JSON.\n"
                       "Возможно, это бинарный файл или повреждён.")
     except OSError as e:
+        logger.exception("Ошибка чтения файла: %s", file_path)
         return None, f"Ошибка чтения файла:\n{e}"
 
     # 2. Парсинг JSON и валидация — общая с load_model_from_string
-    return load_model_from_string(text)
+    model, error = load_model_from_string(text)
+    if model is None:
+        logger.error("Загрузка проекта не удалась: %s — %s", file_path, error)
+        return None, error
+
+    logger.info(
+        "Проект загружен: %s (месяц=%d, год=%d, сотрудников=%d)",
+        file_path, model.month, model.year, model.get_employee_count(),
+    )
+    return model, ""
 
 
 def load_model_from_string(text):

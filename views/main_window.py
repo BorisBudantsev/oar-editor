@@ -18,6 +18,7 @@ from views.dialogs import NewProjectWizard
 from utils.constants import MONTHS
 from utils import storage
 from utils.validation import check_schedule
+from utils.logger import get_log_path
 from app_config import get
 
 
@@ -111,7 +112,8 @@ class MainWindow(QMainWindow):
         if self._project_loaded:
             self._refresh_validation()
 
-        self.statusBar().showMessage("Готов к работе")
+        log_path = get_log_path()
+        self.statusBar().showMessage(f"Готов к работе. Лог: {log_path}")
         self.statusBar().setFixedHeight(25)
 
     # ------------------------------------------------------------------
@@ -158,6 +160,8 @@ class MainWindow(QMainWindow):
         self.act_settings = QAction("Настройки", self)
         self.act_directory = QAction("Справочник сотрудников", self)
         self.act_directory.triggered.connect(self._show_directory_dialog)
+        self.act_open_logs = QAction("Открыть папку с логами", self)
+        self.act_open_logs.triggered.connect(self._open_logs_folder)
 
         self.act_exp_html = QAction("HTML", self)
         self.act_exp_excel = QAction("Excel", self)
@@ -194,6 +198,8 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.act_stats)
         tools_menu.addSeparator()
         tools_menu.addAction(self.act_directory)
+        tools_menu.addSeparator()
+        tools_menu.addAction(self.act_open_logs)
         tools_menu.addSeparator()
         tools_menu.addAction(self.act_settings)
 
@@ -355,6 +361,25 @@ class MainWindow(QMainWindow):
         from views.dialogs import EmployeeDirectoryDialog
         dlg = EmployeeDirectoryDialog(self)
         dlg.exec_()
+
+    def _open_logs_folder(self):
+        """Открывает папку с логами в Проводнике."""
+        import os
+        import subprocess
+
+        path = get_log_path()
+        folder = os.path.dirname(path)
+        try:
+            if os.path.exists(folder):
+                # Windows
+                os.startfile(folder)
+            else:
+                QMessageBox.information(
+                    self, "Папка логов",
+                    f"Папка ещё не создана:\n{folder}"
+                )
+        except Exception as e:
+            QMessageBox.warning(self, "Ошибка", f"Не удалось открыть папку:\n{e}")
 
     # ------------------------------------------------------------------
     # Экспорт
