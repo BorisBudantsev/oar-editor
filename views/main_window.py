@@ -503,11 +503,7 @@ class MainWindow(QMainWindow):
 
     def _ctx_paste(self, row, col):
         from PyQt5.QtWidgets import QApplication
-        from utils.constants import (
-            CODES_OPERATION, CODES_ENDO,
-            SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER,
-            CATEGORY_PERMANENT, CATEGORY_PARTTIME,
-        )
+        from utils.rules import allowed_values, allowed_special_values
 
         text = QApplication.clipboard().text().strip()
         if not text:
@@ -520,23 +516,9 @@ class MainWindow(QMainWindow):
 
         if row_type == 'employee':
             current = self.controller.get_cell_value(row, col)
-            if data['category'] == CATEGORY_PERMANENT:
-                allowed = set(
-                    [""] + list(CODES_OPERATION) + list(CODES_ENDO)
-                    + ["Д", "вых", "до 17", "до 16"]
-                )
-            else:  # parttime — учитываем правило «*» перед рабочим кодом
-                if current == "":
-                    allowed = {"*"}
-                elif current == "*":
-                    allowed = set(list(CODES_OPERATION) + list(CODES_ENDO) + ["Д", ""])
-                else:  # current — рабочий код
-                    allowed = set(list(CODES_OPERATION) + list(CODES_ENDO) + ["Д", "*"])
+            allowed = set(allowed_values(data, current))
         elif row_type == 'special':
-            if data == "Э":
-                allowed = set(list(SPECIAL_VALUES_ENDO) + [""])
-            else:
-                allowed = set(list(SPECIAL_VALUES_OPER) + [""])
+            allowed = set(allowed_special_values(data))
         else:
             return
 
