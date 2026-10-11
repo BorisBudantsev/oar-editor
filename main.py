@@ -2,10 +2,15 @@
 
 import sys
 import os
+import logging
+
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
+
+from app_config import get, ROLE
+from utils.constants import APP_VERSION
+from utils.logger import setup_logging, install_excepthook, get_log_path
 from views.main_window import MainWindow
-from app_config import get
 
 
 def resource_path(relative_path):
@@ -19,6 +24,16 @@ def resource_path(relative_path):
 
 
 if __name__ == "__main__":
+    # 1. Логирование — как можно раньше
+    setup_logging()
+    install_excepthook()
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Старт приложения: версия=%s, роль=%s, лог=%s",
+        APP_VERSION, ROLE, get_log_path(),
+    )
+
     app = QApplication(sys.argv)
     app.setApplicationName(get("app_title"))
 
