@@ -3,9 +3,11 @@
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QLineEdit
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPen
-from utils.constants import (
-    CODES_PERMANENT, SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER, WORKPLACE_CODES,
-    CATEGORY_PERMANENT, CATEGORY_PARTTIME, CLEAR_LABEL
+from utils.constants import CLEAR_LABEL
+from utils.rules import (
+    allowed_values,
+    allowed_special_values,
+    normalize_on_clear,
 )
 
 
@@ -52,29 +54,21 @@ class ScheduleDelegate(QStyledItemDelegate):
 
         row_type, data = self.controller.get_row_info(index.row())
         current = index.data(Qt.DisplayRole) or ""
+
         if row_type == 'notes':
             editor = QLineEdit(parent)
             editor.setMaxLength(10)
             return editor
 
         if row_type == 'employee':
-            if data['category'] == CATEGORY_PERMANENT:
-                values = list(CODES_PERMANENT) + [CLEAR_LABEL]
-            else:  # совместитель
-                if current == "":
-                    values = ["*", CLEAR_LABEL]
-                else:
-                    # "*" обязательно в списке, иначе текущее значение не подсветится
-                    # и ячейка затрётся при первом же клике вне редактора
-                    values = list(WORKPLACE_CODES) + ["*", CLEAR_LABEL]
+            values = list(allowed_values(data, current))
         elif row_type == 'special':
-            # data — ключ строки: «Э» или «О»
-            if data == "Э":
-                values = list(SPECIAL_VALUES_ENDO) + [CLEAR_LABEL]
-            else:
-                values = list(SPECIAL_VALUES_OPER) + [CLEAR_LABEL]
+            values = list(allowed_special_values(data))
         else:
             return None
+
+        # UI-метка «очистить» добавляется последней
+        values.append(CLEAR_LABEL)
 
         combo = WideComboBox(parent)
         combo.addItems(values)
@@ -92,12 +86,10 @@ class ScheduleDelegate(QStyledItemDelegate):
     def setEditorData(self, editor, index):
         value = index.data(Qt.DisplayRole) or ""
 
-        # Для примечаний — обычный QLineEdit, устанавливаем текст напрямую
         if isinstance(editor, QLineEdit):
             editor.setText(value)
             return
 
-        # Для выпадающих списков — ищем текущее значение
         if value:
             i = editor.findText(value)
             if i >= 0:
@@ -107,9 +99,8 @@ class ScheduleDelegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         row_type, data = self.controller.get_row_info(index.row())
 
-        # Для примечаний — обычный QLineEdit, берём текст
         if row_type == 'notes':
-            value = editor.text()[:10]   # страховка на случай вставки
+            value = editor.text()[:10]
             model.setData(index, value, Qt.EditRole)
             return
 
@@ -117,21 +108,11 @@ class ScheduleDelegate(QStyledItemDelegate):
         current = index.data(Qt.DisplayRole) or ""
 
         if row_type == 'employee':
-            emp = data
-            if emp['category'] == CATEGORY_PARTTIME:
-                if value == CLEAR_LABEL:
-                    if current in WORKPLACE_CODES:
-                        value = "*"
-                    else:
-                        value = ""
-            else:  # постоянный
-                if value == CLEAR_LABEL:
-                    value = ""
-
+            if value == CLEAR_LABEL:
+                value = normalize_on_clear(data, current)
         elif row_type == 'special':
             if value == CLEAR_LABEL:
                 value = ""
-
         else:
             return
 
