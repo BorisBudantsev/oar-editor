@@ -2,6 +2,7 @@
 
 import calendar
 import html
+import logging
 
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtGui import QTextDocument
@@ -10,6 +11,7 @@ from utils.constants import MONTHS, WEEKDAY_SHORT, CATEGORY_PERMANENT, CATEGORY_
 from app_config import get
 
 
+logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 # Сбор данных
 # ----------------------------------------------------------------------
@@ -134,14 +136,14 @@ def export_html(parent, model, scale=8):
     if not path:
         return
     try:
-        html = build_html(model, scale)
+        html_content = build_html(model, scale)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(html)
+            f.write(html_content)
+        logger.info("Экспорт HTML: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта HTML: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить HTML:\n{e}")
-
-
 # ----------------------------------------------------------------------
 # Excel
 # ----------------------------------------------------------------------
@@ -267,8 +269,10 @@ def export_excel(parent, model, scale=8):
             ws.column_dimensions[get_column_letter(2 + d)].width = 5
 
         wb.save(path)
+        logger.info("Экспорт Excel: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта Excel: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить Excel:\n{e}")
 
 
@@ -368,8 +372,10 @@ def export_word(parent, model, scale=8):
                     set_cell_bg(cell, 'DBDBDB')
 
         doc.save(path)
+        logger.info("Экспорт Word: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта Word: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить Word:\n{e}")
 
 
@@ -395,8 +401,10 @@ def export_pdf(parent, model, scale=8):
         printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
 
         doc.print_(printer)
+        logger.info("Экспорт PDF: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта PDF: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить PDF:\n{e}")
         # ======================================================================
 # ЭКСПОРТ ОТЧЁТА АНАЛИЗА ЗАГРУЖЕННОСТИ
@@ -507,8 +515,10 @@ def export_stats_html(parent, model, report, scale=8):
         html = build_stats_html(model, report, scale)
         with open(path, "w", encoding="utf-8") as f:
             f.write(html)
+        logger.info("Экспорт отчёта HTML: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта отчёта HTML: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить HTML:\n{e}")
 
 
@@ -627,8 +637,10 @@ def export_stats_excel(parent, model, report, scale=8):
         ws3.column_dimensions['B'].width = 14
 
         wb.save(path)
+        logger.info("Экспорт отчёта Excel: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта отчёта Excel: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить Excel:\n{e}")
 
 
@@ -781,8 +793,10 @@ def export_stats_word(parent, model, report, scale=8):
                         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         doc.save(path)
+        logger.info("Экспорт отчёта Word: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта отчёта Word: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить Word:\n{e}")
 
 
@@ -808,6 +822,8 @@ def export_stats_pdf(parent, model, report, scale=8):
         printer.setPageMargins(10, 10, 10, 10, QPrinter.Millimeter)
 
         doc.print_(printer)
+        logger.info("Экспорт отчёта PDF: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
+        logger.exception("Ошибка экспорта отчёта PDF: %s", path)
         QMessageBox.critical(parent, "Ошибка", f"Не удалось сохранить PDF:\n{e}")
