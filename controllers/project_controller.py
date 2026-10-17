@@ -309,7 +309,7 @@ class ProjectController:
         if data['duty_home'][day_index] == value:
             return False
         data['duty_home'][day_index] = value
-        self.model._dirty = True
+        self.model.mark_dirty()
         return True
 
     def _adjust_cell_fonts(self):

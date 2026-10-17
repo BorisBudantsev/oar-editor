@@ -2,8 +2,13 @@
 
 import json
 import calendar
-from utils.constants import MONTHS, PROJECT_VERSION
+import logging
+from utils.constants import MONTHS, PROJECT_VERSION, SUPPORTED_VERSIONS
 from app_config import ROLE
+
+
+logger = logging.getLogger(__name__)
+
 
 class ProjectModel:
     def __init__(self, month=0, year=2025):
@@ -108,8 +113,11 @@ class ProjectModel:
     
     def from_json(self, json_str):
         data = json.loads(json_str)
-        if data.get("version") != PROJECT_VERSION:
-            print("Внимание: версия проекта отличается от текущей")
+        # Строгую проверку версии выполняет storage перед вызовом from_json.
+        # Здесь только предупреждаем о версии, которую конвертер не знает.
+        version = data.get("version")
+        if version not in SUPPORTED_VERSIONS:
+            logger.warning("Загрузка проекта с неизвестной версией: %s", version)
         # Роль: старые файлы (v1.0) не имеют поля — считаем их врачебными
         self.role = data.get("role", "doctor")
         self.month = data["month"]
@@ -133,6 +141,10 @@ class ProjectModel:
 
     def is_dirty(self):
         return self._dirty
+
+    def mark_dirty(self):
+        """Помечает модель как изменённую (для внешних контроллеров)."""
+        self._dirty = True
 
     def mark_clean(self):
         self._dirty = False

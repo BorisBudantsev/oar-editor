@@ -1,5 +1,7 @@
 # views/main_window.py
 
+import logging
+
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QToolBar, QAction, QTableWidget,
@@ -20,6 +22,9 @@ from utils import storage
 from utils.validation import check_schedule
 from utils.logger import get_log_path
 from app_config import get
+
+
+logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -98,7 +103,6 @@ class MainWindow(QMainWindow):
         header = self.table.horizontalHeader()
         header.setSectionsClickable(True)
         header.sectionClicked.connect(self._on_header_clicked)
-        header.setContextMenuPolicy(Qt.CustomContextMenu)
         header.setContextMenuPolicy(Qt.NoContextMenu)
 
         # --- попытка восстановить автосохранение ---
@@ -157,7 +161,6 @@ class MainWindow(QMainWindow):
 
         self.act_check = QAction("Список ошибок", self)
         self.act_stats = QAction("Анализ загруженности", self)
-        self.act_settings = QAction("Настройки", self)
         self.act_directory = QAction("Справочник сотрудников", self)
         self.act_directory.triggered.connect(self._show_directory_dialog)
         self.act_open_logs = QAction("Открыть папку с логами", self)
@@ -200,8 +203,6 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.act_directory)
         tools_menu.addSeparator()
         tools_menu.addAction(self.act_open_logs)
-        tools_menu.addSeparator()
-        tools_menu.addAction(self.act_settings)
 
         export_menu = menubar.addMenu("Экспорт")
         export_menu.addAction(self.act_exp_html)
@@ -330,7 +331,7 @@ class MainWindow(QMainWindow):
         try:
             AutosaveModel.save(self.project_model.to_json())
         except Exception:
-            pass
+            logger.exception("Ошибка автосохранения проекта")
 
        # Валидация и автосохранение
     # ------------------------------------------------------------------
