@@ -12,6 +12,7 @@ a = Analysis(
     ],
     hiddenimports=[
         'PyQt5.QtPrintSupport',
+        'PyQt5.QtSvg',
         'openpyxl',
         'docx',
     ],

@@ -1,6 +1,7 @@
 # views/main_window.py
 
 import logging
+import os
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -8,6 +9,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QLabel, QMessageBox, QUndoStack
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
+from PyQt5.QtGui import QIcon
 
 from models.project_model import ProjectModel
 from models.employee_model import EmployeeModel
@@ -19,6 +21,7 @@ from views.delegates import ScheduleDelegate
 from views.dialogs import NewProjectWizard
 from utils.constants import MONTHS
 from utils import storage
+from utils.resources import resource_path
 from utils.validation import check_schedule
 from utils.logger import get_log_path
 from app_config import get
@@ -180,6 +183,49 @@ class MainWindow(QMainWindow):
         self.act_exp_word.triggered.connect(self._export_word)
         self.act_exp_pdf.triggered.connect(self._export_pdf)
 
+        self._assign_icons()
+
+    # ------------------------------------------------------------------
+    # Иконки действий
+    # ------------------------------------------------------------------
+    def _assign_icons(self):
+        """Назначает иконки действиям панели инструментов и меню.
+
+        Иконки берутся из `assets/icons/`. Файл намеренно указывается явно
+        (а не через набор стандартных иконок Qt), чтобы оформление не
+        зависело от системной темы.
+        """
+        icons = {
+            self.act_new: "new",
+            self.act_open: "open",
+            self.act_save: "save",
+            self.act_save_as: "save_as",
+            self.act_exit: "exit",
+            self.act_undo: "undo",
+            self.act_redo: "redo",
+            self.act_check: "check",
+            self.act_stats: "stats",
+            self.act_directory: "directory",
+            self.act_open_logs: "open_logs",
+            self.act_exp_html: "export_html",
+            self.act_exp_excel: "export_excel",
+            self.act_exp_word: "export_word",
+            self.act_exp_pdf: "export_pdf",
+        }
+        for action, name in icons.items():
+            icon = self._icon(name)
+            if not icon.isNull():
+                action.setIcon(icon)
+
+    @staticmethod
+    def _icon(name):
+        """Возвращает QIcon из `assets/icons/<name>.svg` (пустой, если нет файла)."""
+        path = resource_path(os.path.join("assets", "icons", name + ".svg"))
+        if os.path.exists(path):
+            return QIcon(path)
+        logger.warning("Иконка не найдена: %s", path)
+        return QIcon()
+
     # ------------------------------------------------------------------
     def create_menu(self):
         menubar = self.menuBar()
@@ -213,17 +259,33 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def create_toolbar(self):
         toolbar = self.addToolBar("Главная")
-        toolbar.setIconSize(QSize(16, 16))
+        toolbar.setIconSize(QSize(24, 24))
 
+        # Файл
         toolbar.addAction(self.act_new)
         toolbar.addAction(self.act_open)
         toolbar.addAction(self.act_save)
+        toolbar.addAction(self.act_save_as)
+        toolbar.addAction(self.act_exit)
         toolbar.addSeparator()
+
+        # Правка
         toolbar.addAction(self.act_undo)
         toolbar.addAction(self.act_redo)
         toolbar.addSeparator()
+
+        # Инструменты
+        toolbar.addAction(self.act_check)
         toolbar.addAction(self.act_stats)
         toolbar.addAction(self.act_directory)
+        toolbar.addAction(self.act_open_logs)
+        toolbar.addSeparator()
+
+        # Экспорт
+        toolbar.addAction(self.act_exp_html)
+        toolbar.addAction(self.act_exp_excel)
+        toolbar.addAction(self.act_exp_word)
+        toolbar.addAction(self.act_exp_pdf)
 
     # ------------------------------------------------------------------
     # Проект: создание / открытие / сохранение

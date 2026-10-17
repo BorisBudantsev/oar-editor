@@ -209,7 +209,7 @@ OAR_Editor/
 ├── DATA_FORMAT.md форматы данных
 ├── RULES.md правила предметной области
 ├── CHANGELOG.md история изменений
-├── assets/ иконки
+├── assets/ иконки приложения (app*.ico, icons/*.svg)
 ├── data/ база SQLite (режим разработки)
 ├── controllers/ связка модели и интерфейса
 ├── models/ данные

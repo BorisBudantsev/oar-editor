@@ -10,17 +10,8 @@ from PyQt5.QtGui import QIcon
 from app_config import get, ROLE
 from utils.constants import APP_VERSION
 from utils.logger import setup_logging, install_excepthook, get_log_path
+from utils.resources import resource_path
 from views.main_window import MainWindow
-
-
-def resource_path(relative_path):
-    """Возвращает путь к ресурсу с учётом работы из .exe."""
-    if hasattr(sys, "_MEIPASS"):
-        # PyInstaller распаковывает ресурсы во временную папку
-        return os.path.join(sys._MEIPASS, relative_path)
-    # Из исходников — путь относительно самого файла main.py,
-    # а не текущего каталога, из которого запущен интерпретатор
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
 
 if __name__ == "__main__":
