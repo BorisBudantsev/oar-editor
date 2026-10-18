@@ -5,11 +5,29 @@ import logging
 import os
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from models.project_model import ProjectModel
-from utils.constants import PROJECT_VERSION, SUPPORTED_VERSIONS
+from utils.constants import (
+    PROJECT_VERSION, SUPPORTED_VERSIONS, CATEGORIES, CATEGORY_PERMANENT,
+)
+from utils.validation import (
+    ALLOWED_PERMANENT, ALLOWED_PARTTIME,
+    ALLOWED_SPECIAL_ENDO, ALLOWED_SPECIAL_OPER,
+)
 from app_config import ROLE, get
 
 
 logger = logging.getLogger(__name__)
+
+# Роли, допустимые в JSON-проекте.
+VALID_ROLES = ("doctor", "nurse")
+
+
+def _is_int(value):
+    """True для целого числа, но не для bool.
+
+    В Python ``bool`` — подкласс ``int``, поэтому ``isinstance(True, int)``
+    истинно. Для полей month/year/nextId/id логическое значение недопустимо.
+    """
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 # ----------------------------------------------------------------------
@@ -103,7 +121,8 @@ def load_model_from_file(file_path):
     # 2. Парсинг JSON и валидация — общая с load_model_from_string
     model, error = load_model_from_string(text)
     if model is None:
-        logger.error("Загрузка проекта не удалась: %s — %s", file_path, error)
+        # В error может быть ФИО сотрудника — в лог его не пишем.
+        logger.error("Загрузка проекта не удалась: %s", file_path)
         return None, error
 
     logger.info(
@@ -129,9 +148,13 @@ def load_model_from_string(text):
 
 
 def _validate_and_build(text, data):
-    """Общая валидация структуры и сборка ProjectModel.
+    """Строгая валидация структуры и содержимого JSON и сборка ProjectModel.
 
     Используется и при загрузке из файла, и при загрузке из строки.
+    Молчаливое «исправление» повреждённых современных файлов недопустимо —
+    при несоответствии файл отклоняется целиком. Для отсутствующих полей
+    старых форматов (role, notes, duty_home) применяются только
+    предусмотренные миграционные значения (см. ProjectModel.from_json).
     """
     # 1. Корневой элемент — объект
     if not isinstance(data, dict):
@@ -150,8 +173,16 @@ def _validate_and_build(text, data):
             f"Актуальная: {PROJECT_VERSION}"
         )
 
-    # 3. Роль: старые файлы без role считаются врачебными (doctor)
-    file_role = data.get("role", "doctor")
+    # 3. Роль: старые файлы (1.0) без поля считаются врачебными (doctor)
+    if "role" in data:
+        file_role = data["role"]
+        if not isinstance(file_role, str) or file_role not in VALID_ROLES:
+            return None, (
+                f"Некорректное значение поля 'role': {file_role!r}. "
+                f"Ожидается 'doctor' или 'nurse'."
+            )
+    else:
+        file_role = "doctor"
     if file_role != ROLE:
         file_role_name = "врачей" if file_role == "doctor" else "медицинских сестёр"
         current_role_name = "врачей" if ROLE == "doctor" else "медицинских сестёр"
@@ -167,49 +198,139 @@ def _validate_and_build(text, data):
     if missing:
         return None, f"В файле отсутствуют обязательные поля: {', '.join(missing)}"
 
-    # 5. Типы и значения
+    # 5. Типы и значения верхнего уровня
     month = data["month"]
     year = data["year"]
     employees = data["employees"]
     special = data["special"]
     next_id = data["nextId"]
 
-    if not isinstance(month, int) or not (0 <= month <= 11):
-        return None, f"Некорректный месяц: {month}. Ожидается 0–11."
-    if not isinstance(year, int) or not (1900 <= year <= 2200):
-        return None, f"Некорректный год: {year}. Ожидается 1900–2200."
+    if not _is_int(month) or not (0 <= month <= 11):
+        return None, f"Некорректный месяц: {month!r}. Ожидается целое 0–11."
+    if not _is_int(year) or not (1900 <= year <= 2200):
+        return None, f"Некорректный год: {year!r}. Ожидается целое 1900–2200."
     if not isinstance(employees, list):
         return None, "Поле 'employees' должно быть списком."
     if not isinstance(special, dict):
         return None, "Поле 'special' должно быть объектом."
-    if not isinstance(next_id, int) or next_id < 1:
-        return None, f"Некорректное значение nextId: {next_id}."
+    if not _is_int(next_id) or next_id < 1:
+        return None, f"Некорректное значение nextId: {next_id!r}. Ожидается целое ≥ 1."
 
-    # 6. Поля «Э» и «О» в special
+    # 6. Поля «Э» и «О» в special: ключи, тип и допустимые значения
+    special_allowed = {"Э": ALLOWED_SPECIAL_ENDO, "О": ALLOWED_SPECIAL_OPER}
     for key in ("Э", "О"):
         if key not in special:
             return None, f"В поле 'special' отсутствует ключ «{key}»."
         if not isinstance(special[key], list):
             return None, f"Поле 'special.{key}' должно быть списком."
+    # Любые дополнительные ключи special тоже должны быть списками
+    for key, values in special.items():
+        if not isinstance(values, list):
+            return None, f"Поле 'special.{key}' должно быть списком."
+    for key, allowed in special_allowed.items():
+        for pos, value in enumerate(special[key]):
+            if not isinstance(value, str):
+                return None, (
+                    f"Недопустимый тип в строке «{key}» (день {pos + 1}): "
+                    f"ожидается строка."
+                )
+            if value != "" and value not in allowed:
+                return None, (
+                    f"Недопустимое значение «{value}» в служебной строке «{key}» "
+                    f"(день {pos + 1})."
+                )
 
     # 7. Сотрудники
+    seen_ids = set()
+    max_id = 0
     for i, emp in enumerate(employees):
         if not isinstance(emp, dict):
             return None, f"Сотрудник #{i + 1} — не объект."
         for field in ("id", "name", "category", "days"):
             if field not in emp:
                 return None, f"У сотрудника #{i + 1} отсутствует поле '{field}'."
-        if not isinstance(emp["days"], list):
-            return None, f"У сотрудника «{emp.get('name', i + 1)}» поле 'days' не список."
 
-    # 8. Сборка модели
+        emp_id = emp["id"]
+        if not _is_int(emp_id) or emp_id < 1:
+            return None, (
+                f"У сотрудника #{i + 1} некорректный id: {emp_id!r}. "
+                f"Ожидается целое ≥ 1."
+            )
+        if emp_id in seen_ids:
+            return None, f"Повторяющийся id сотрудника: {emp_id}."
+        seen_ids.add(emp_id)
+        max_id = max(max_id, emp_id)
+
+        if not isinstance(emp["name"], str):
+            return None, f"У сотрудника #{i + 1} поле 'name' должно быть строкой."
+
+        category = emp["category"]
+        if category not in CATEGORIES:
+            return None, (
+                f"У сотрудника «{emp['name']}» недопустимая категория: "
+                f"{category!r}. Ожидается permanent или parttime."
+            )
+
+        days = emp["days"]
+        if not isinstance(days, list):
+            return None, f"У сотрудника «{emp['name']}» поле 'days' не список."
+
+        allowed_values = (ALLOWED_PERMANENT if category == CATEGORY_PERMANENT
+                          else ALLOWED_PARTTIME)
+        for pos, value in enumerate(days):
+            if not isinstance(value, str):
+                return None, (
+                    f"У сотрудника «{emp['name']}» в дне {pos + 1} "
+                    f"значение не является строкой."
+                )
+            if value not in allowed_values:
+                return None, (
+                    f"У сотрудника «{emp['name']}» недопустимое значение "
+                    f"«{value}» в дне {pos + 1}."
+                )
+
+        # duty_home — строго массив bool (если присутствует)
+        if "duty_home" in emp:
+            duty_home = emp["duty_home"]
+            if not isinstance(duty_home, list):
+                return None, (
+                    f"У сотрудника «{emp['name']}» поле 'duty_home' "
+                    f"должно быть списком."
+                )
+            for pos, flag in enumerate(duty_home):
+                if not isinstance(flag, bool):
+                    return None, (
+                        f"У сотрудника «{emp['name']}» в поле 'duty_home' "
+                        f"день {pos + 1} не является логическим значением."
+                    )
+
+    # 8. Примечания (если присутствуют)
+    if "notes" in data:
+        notes = data["notes"]
+        if not isinstance(notes, list):
+            return None, "Поле 'notes' должно быть списком."
+        for pos, value in enumerate(notes):
+            if not isinstance(value, str):
+                return None, (
+                    f"Элемент {pos + 1} поля 'notes' должен быть строкой."
+                )
+
+    # 9. Согласованность nextId с идентификаторами сотрудников:
+    #    nextId — следующий свободный id, он должен быть больше любого id.
+    if next_id <= max_id:
+        return None, (
+            f"Поле 'nextId' ({next_id}) не согласовано с id сотрудников "
+            f"(максимальный id = {max_id})."
+        )
+
+    # 10. Сборка модели
     model = ProjectModel()
     try:
         model.from_json(text)
     except Exception as e:
         return None, f"Ошибка разбора данных:\n{e}"
 
-    # 9. Строгая проверка длин массивов
+    # 11. Строгая проверка длин массивов
     target_days = model.days_in_month()
     try:
         _validate_days_lengths(model, target_days)

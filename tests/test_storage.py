@@ -27,6 +27,9 @@ def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor",
         for emp in employees:
             if "duty_home" not in emp:
                 emp["duty_home"] = list(duty_home_default)
+    # nextId — следующий свободный id, он должен быть больше любого id
+    # сотрудника (требование строгой валидации storage).
+    next_id = max((e.get("id", 0) for e in employees), default=0) + 1
     return json.dumps({
         "version": PROJECT_VERSION,
         "role": role,
@@ -35,7 +38,7 @@ def _valid_json(month=0, year=2025, employees=None, special=None, role="doctor",
         "employees": employees,
         "special": special,
         "notes": notes,
-        "nextId": 1,
+        "nextId": next_id,
     }, ensure_ascii=False)
 
 

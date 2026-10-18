@@ -14,15 +14,22 @@ class AutosaveModel:
     def save(json_str):
         """Сохраняет JSON-строку модели, заменяя все предыдущие записи.
 
+        Порядок операций намеренный: сначала INSERT новой записи, затем
+        удаление старых. Если запись новой версии не удалась, предыдущая
+        (единственная пригодная) копия несохранённых данных остаётся целой.
+
         Важно: json_str содержит персональные данные (ФИО), поэтому
         в лог она НЕ пишется.
         """
         try:
             with contextlib.closing(get_connection()) as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM autosave")
                 cursor.execute(
                     "INSERT INTO autosave (data_json) VALUES (?)", (json_str,)
+                )
+                new_id = cursor.lastrowid
+                cursor.execute(
+                    "DELETE FROM autosave WHERE id <> ?", (new_id,)
                 )
                 conn.commit()
         except Exception:

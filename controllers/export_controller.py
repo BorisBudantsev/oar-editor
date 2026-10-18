@@ -147,22 +147,11 @@ def export_html(parent, model, scale=8):
 # ----------------------------------------------------------------------
 # Excel
 # ----------------------------------------------------------------------
-def export_excel(parent, model, scale=8):
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-        from openpyxl.utils import get_column_letter
-    except ImportError:
-        QMessageBox.critical(parent, "Нет библиотеки",
-            "Не установлен openpyxl.\nВыполните: pip install openpyxl")
-        return
-
-    path, _ = QFileDialog.getSaveFileName(
-        parent, "Экспорт в Excel", _default_name(model, "xlsx"),
-        "Excel (*.xlsx);;Все файлы (*)"
-    )
-    if not path:
-        return
+def write_excel_file(model, path, scale=8):
+    """Формирует и сохраняет XLSX-файл графика (без диалогов)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
 
     try:
         data = _collect_data(model)
@@ -211,12 +200,11 @@ def export_excel(parent, model, scale=8):
         for idx, emp in enumerate(data['employees']):
             ws.cell(row=row, column=1, value=idx + 1).alignment = center
             ws.cell(row=row, column=2, value=emp['name']).alignment = left
+            duty_home = emp.get('duty_home', [])
             for day in range(days):
                 value = emp['days'][day] if day < len(emp['days']) else ""
                 c = ws.cell(row=row, column=3 + day, value=value)
                 c.alignment = center
-
-                duty_home = emp.get('duty_home', [])
             for c in range(1, days + 3):
                 cell = ws.cell(row=row, column=c)
                 if idx == data['last_permanent_idx']:
@@ -269,6 +257,29 @@ def export_excel(parent, model, scale=8):
             ws.column_dimensions[get_column_letter(2 + d)].width = 5
 
         wb.save(path)
+    except Exception:
+        logger.exception("Ошибка формирования Excel: %s", path)
+        raise
+    return path
+
+
+def export_excel(parent, model, scale=8):
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError:
+        QMessageBox.critical(parent, "Нет библиотеки",
+            "Не установлен openpyxl.\nВыполните: pip install openpyxl")
+        return
+
+    path, _ = QFileDialog.getSaveFileName(
+        parent, "Экспорт в Excel", _default_name(model, "xlsx"),
+        "Excel (*.xlsx);;Все файлы (*)"
+    )
+    if not path:
+        return
+
+    try:
+        write_excel_file(model, path, scale)
         logger.info("Экспорт Excel: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
@@ -279,14 +290,120 @@ def export_excel(parent, model, scale=8):
 # ----------------------------------------------------------------------
 # Word
 # ----------------------------------------------------------------------
+# Цвета заливки ячейки в Word. Совпадают с HTML и Excel:
+#   средний серый — выходной без дежурства или будний день с дежурством;
+#   тёмно-серый   — выходной с дежурством на дому.
+WORD_FILL_SHADE = 'CCCCCC'
+WORD_FILL_DUTY_DARK = '969696'
+
+
+def write_word_file(model, path, scale=8):
+    """Формирует и сохраняет DOCX-файл графика (без диалогов).
+
+    Вынесено из ``export_word``, чтобы экспорт можно было проверять
+    автотестами без участия пользовательского интерфейса.
+    """
+    from docx import Document
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.section import WD_ORIENT
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    data = _collect_data(model)
+    days = data['days']
+    weekend = data['weekend_days']
+    employees = data['employees']
+
+    doc = Document()
+    section = doc.sections[0]
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width, section.page_height = section.page_height, section.page_width
+
+    heading = doc.add_paragraph()
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = heading.add_run(
+        f"{get('app_title')} · {MONTHS[data['month']]} {data['year']}"
+    )
+    run.bold = True
+    run.font.size = Pt(scale + 4)
+
+    total_rows = len(employees) + 3 + 1   # +2 (Э, О) +1 (notes) +1 (шапка)
+    total_cols = days + 2
+    table = doc.add_table(rows=total_rows, cols=total_cols)
+    table.style = 'Table Grid'
+
+    hdr = table.rows[0].cells
+    hdr[0].text = "№"
+    hdr[1].text = "ФИО"
+    for d in range(1, days + 1):
+        wd = calendar.weekday(data['year'], data['month'] + 1, d)
+        hdr[1 + d].text = f"{d}\n{WEEKDAY_SHORT[wd]}"
+
+    for idx, emp in enumerate(employees):
+        row = table.rows[idx + 1].cells
+        row[0].text = str(idx + 1)
+        row[1].text = emp['name']
+        for day in range(days):
+            value = emp['days'][day] if day < len(emp['days']) else ""
+            row[2 + day].text = str(value)
+
+    special_start = len(employees) + 1
+    for i, (key, values) in enumerate(data['special'].items()):
+        row = table.rows[special_start + i].cells
+        row[1].text = key
+        for day in range(days):
+            value = values[day] if day < len(values) else ""
+            row[2 + day].text = str(value)
+
+    # Строка примечаний
+    notes_start = special_start + len(data['special'])
+    notes = data.get('notes', [])
+    row = table.rows[notes_start].cells
+    for day in range(days):
+        value = notes[day] if day < len(notes) else ""
+        row[2 + day].text = str(value)
+
+    def set_cell_bg(cell, color_hex):
+        tcPr = cell._tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), color_hex)
+        tcPr.append(shd)
+
+    for r_idx in range(total_rows):
+        # Строки 1..len(employees) — сотрудники (0 — шапка).
+        emp = None
+        if 1 <= r_idx <= len(employees):
+            emp = employees[r_idx - 1]
+            emp_duty = emp.get('duty_home', [])
+        else:
+            emp_duty = []
+        for c_idx in range(total_cols):
+            cell = table.rows[r_idx].cells[c_idx]
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    run.font.size = Pt(scale)
+            if c_idx >= 2:
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                day_idx = c_idx - 2
+                # weekend хранит номера дней (1-based): столбец c_idx
+                # соответствует дню (c_idx - 1).
+                is_weekend = (c_idx - 1) in weekend
+                is_duty = day_idx < len(emp_duty) and emp_duty[day_idx]
+                if is_duty and is_weekend:
+                    set_cell_bg(cell, WORD_FILL_DUTY_DARK)
+                elif is_duty or is_weekend:
+                    set_cell_bg(cell, WORD_FILL_SHADE)
+
+    doc.save(path)
+    return path
+
+
 def export_word(parent, model, scale=8):
     try:
-        from docx import Document
-        from docx.shared import Pt
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.enum.section import WD_ORIENT
-        from docx.oxml.ns import qn
-        from docx.oxml import OxmlElement
+        import docx  # noqa: F401
     except ImportError:
         QMessageBox.critical(parent, "Нет библиотеки",
             "Не установлен python-docx.\nВыполните: pip install python-docx")
@@ -300,78 +417,7 @@ def export_word(parent, model, scale=8):
         return
 
     try:
-        data = _collect_data(model)
-        days = data['days']
-        weekend = data['weekend_days']
-
-        doc = Document()
-        section = doc.sections[0]
-        section.orientation = WD_ORIENT.LANDSCAPE
-        section.page_width, section.page_height = section.page_height, section.page_width
-
-        heading = doc.add_paragraph()
-        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = heading.add_run(
-            f"{get('app_title')} · {MONTHS[data['month']]} {data['year']}"
-        )
-        run.bold = True
-        run.font.size = Pt(scale + 4)
-
-        total_rows = len(data['employees']) + 3 + 1   # +2 (Э, О) +1 (notes) +1 (шапка)
-        total_cols = days + 2
-        table = doc.add_table(rows=total_rows, cols=total_cols)
-        table.style = 'Table Grid'
-
-        hdr = table.rows[0].cells
-        hdr[0].text = "№"
-        hdr[1].text = "ФИО"
-        for d in range(1, days + 1):
-            wd = calendar.weekday(data['year'], data['month'] + 1, d)
-            hdr[1 + d].text = f"{d}\n{WEEKDAY_SHORT[wd]}"
-
-        for idx, emp in enumerate(data['employees']):
-            row = table.rows[idx + 1].cells
-            row[0].text = str(idx + 1)
-            row[1].text = emp['name']
-            for day in range(days):
-                value = emp['days'][day] if day < len(emp['days']) else ""
-                row[2 + day].text = str(value)
-
-        special_start = len(data['employees']) + 1
-        for i, (key, values) in enumerate(data['special'].items()):
-            row = table.rows[special_start + i].cells
-            row[1].text = key
-            for day in range(days):
-                value = values[day] if day < len(values) else ""
-                row[2 + day].text = str(value)
-                        # Строка примечаний
-        notes_start = special_start + len(data['special'])
-        notes = data.get('notes', [])
-        row = table.rows[notes_start].cells
-        for day in range(days):
-            value = notes[day] if day < len(notes) else ""
-            row[2 + day].text = str(value)
-
-        def set_cell_bg(cell, color_hex):
-            tcPr = cell._tc.get_or_add_tcPr()
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), color_hex)
-            tcPr.append(shd)
-
-        for r_idx in range(total_rows):
-            for c_idx in range(total_cols):
-                cell = table.rows[r_idx].cells[c_idx]
-                for p in cell.paragraphs:
-                    for run in p.runs:
-                        run.font.size = Pt(scale)
-                if c_idx >= 2:
-                    cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                if c_idx >= 2 and (c_idx - 2) in weekend:
-                    set_cell_bg(cell, 'DBDBDB')
-
-        doc.save(path)
+        write_word_file(model, path, scale)
         logger.info("Экспорт Word: %s", path)
         QMessageBox.information(parent, "Готово", f"Файл сохранён:\n{path}")
     except Exception as e:
