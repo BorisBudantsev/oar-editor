@@ -291,39 +291,61 @@ class MainWindow(QMainWindow):
     # Проект: создание / открытие / сохранение
     # ------------------------------------------------------------------
     def new_project(self):
-        # Единая проверка: не потерять несохранённые изменения текущего проекта.
+        """Создаёт новый проект через мастер.
+
+        Мастер показывается РАНЬШЕ вопроса о несохранённых изменениях.
+        Если пользователь отменит мастер, текущий проект, его файл и
+        автосохранение остаются нетронутыми. Вопрос о судьбе текущего
+        проекта задаётся только после того, как создание подтверждено.
+        """
+        wizard = NewProjectWizard(self)
+        if wizard.exec_() != wizard.Accepted:
+            # Отмена мастера — ничего не меняем и не трогаем автосохранение.
+            return
+
+        month, year, employee_ids = wizard.get_result()
+
+        # Создание подтверждено — только теперь решаем судьбу текущего проекта.
         if not self._maybe_save_changes():
             return
 
-        wizard = NewProjectWizard(self)
-        if wizard.exec_() == wizard.Accepted:
-            month, year, employee_ids = wizard.get_result()
+        new_model = ProjectModel(month=month, year=year)
+        for emp_id in employee_ids:
+            emp = EmployeeModel.get_by_id(emp_id)
+            if emp:
+                new_model.add_employee(emp['name'], emp['category'])
 
-            new_model = ProjectModel(month=month, year=year)
-            for emp_id in employee_ids:
-                emp = EmployeeModel.get_by_id(emp_id)
-                if emp:
-                    new_model.add_employee(emp['name'], emp['category'])
+        self.current_file = None
+        self._apply_model(new_model)
+        # Новый проект без файла считается несохранённым даже без правок,
+        # поэтому НЕ помечаем его «чистым».
 
-            self.current_file = None
-            self._apply_model(new_model)
-            # Новый проект без файла считается несохранённым даже без правок,
-            # поэтому НЕ помечаем его «чистым».
-
-            self.statusBar().showMessage(f"Создан проект: {MONTHS[month]} {year}")
+        self.statusBar().showMessage(f"Создан проект: {MONTHS[month]} {year}")
 
     def open_project(self):
-        # Единая проверка: не потерять несохранённые изменения текущего проекта.
-        if not self._maybe_save_changes():
-            return
+        """Открывает проект из файла.
 
+        Файл выбирается и загружается РАНЬШЕ вопроса о несохранённых
+        изменениях. Поэтому отмена выбора файла, ошибка чтения/валидации
+        и отмена в диалоге сохранения не затрагивают текущий проект, его
+        файл и автосохранение: переключение просто не выполняется.
+        """
         path = storage.ask_open_path(self)
         if not path:
+            # Отмена выбора файла — текущий проект не трогаем.
             return
 
         model, error = storage.load_model_from_file(path)
         if model is None:
+            # Файл не загрузился — исходный проект и автосохранение целы.
             QMessageBox.critical(self, "Ошибка открытия", error)
+            return
+
+        # Новый файл успешно прочитан и провалидирован. Только теперь
+        # спрашиваем о судьбе несохранённых изменений текущего проекта:
+        # «Сохранить» запишет старый проект, «Не сохранять» отбросит его,
+        # «Отмена» оставит всё как есть.
+        if not self._maybe_save_changes():
             return
 
         self.current_file = path
@@ -428,6 +450,22 @@ class MainWindow(QMainWindow):
           - проект без файла считается несохранённым всегда (новая работа);
           - иначе — расхождение контрольной точки стека отмены с текущим
             состоянием (после полного Undo состояние снова «чистое»).
+
+        ВАЖНО (условие корректности): определение опирается только на
+        QUndoStack и НЕ использует флаг модели ``_dirty``. Это осознанно:
+        после полного Undo данные могут совпадать с сохранёнными, хотя
+        ``_dirty`` остаётся истинным (наивная комбинация
+        ``isClean() and not is_dirty()`` дала бы неверный результат).
+
+        Следовательно, любое действие пользователя, меняющее данные проекта,
+        обязано проходить через undo-стек (``CellEditCommand`` /
+        ``DutyHomeCommand``), иначе изменение не будет обнаружено. Сегодня
+        так и есть: ``ProjectController.set_cell_value`` и
+        ``set_duty_home_at`` вызываются только из undo-команд, а правки
+        ячеек делегатом идут через ``cellChanged`` → ``on_cell_changed``.
+        При добавлении операций вне стека (например, массовой вставки)
+        нужно либо заворачивать их в команду, либо двигать контрольную
+        точку ``undo_stack.setClean()``.
         """
         if not self._project_loaded:
             return False
