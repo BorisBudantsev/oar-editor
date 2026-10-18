@@ -160,33 +160,70 @@ def test_apply_model_stops_pending_timer(window, tmp_path):
 # new_project / open_project не теряют текущий проект
 # ---------------------------------------------------------------------
 
-def test_new_project_cancel_does_not_replace(window, tmp_path, monkeypatch):
+def test_new_project_cancel_prompt_keeps_current_project(
+        window, tmp_path, monkeypatch):
+    """Мастер принят, но в диалоге сохранения выбран «Отмена».
+
+    Подготовительное действие (мастер) выполняется до вопроса о
+    несохранённых изменениях, поэтому «Отмена» оставляет текущий проект
+    и его автосохранение без изменений.
+    """
     _load_project(window, path=tmp_path / "p.json", dirty=True)
-    _answer(monkeypatch, QMessageBox.Cancel)
+    original = window.project_model
+    AutosaveModel.save(window.project_model.to_json())
+    snapshot = AutosaveModel.load_latest()
 
     import views.main_window as mw
 
-    class BoomWizard:
+    class AcceptedWizard:
+        Accepted = 1
+        Rejected = 0
+
         def __init__(self, *a, **k):
-            raise AssertionError("мастер не должен открываться при отмене")
+            pass
 
-    monkeypatch.setattr(mw, "NewProjectWizard", BoomWizard)
-    window.new_project()   # не должно бросить
+        def exec_(self):
+            return self.Accepted
 
+        def get_result(self):
+            return (1, 2025, [])
 
-def test_open_project_cancel_does_not_ask_path(window, tmp_path, monkeypatch):
-    _load_project(window, path=tmp_path / "p.json", dirty=True)
+    monkeypatch.setattr(mw, "NewProjectWizard", AcceptedWizard)
     _answer(monkeypatch, QMessageBox.Cancel)
 
-    called = {"n": 0}
+    window.new_project()
 
-    def fake_ask(parent):
-        called["n"] += 1
-        return None
+    assert window.project_model is original
+    assert window.current_file == str(tmp_path / "p.json")
+    assert AutosaveModel.load_latest() == snapshot
 
-    monkeypatch.setattr(storage, "ask_open_path", fake_ask)
+
+def test_open_project_cancel_prompt_keeps_current_project(
+        window, tmp_path, monkeypatch):
+    """Файл выбран и загружен, но в диалоге сохранения выбрана «Отмена».
+
+    Переключение не выполняется: текущая модель, файл и автосохранение
+    остаются прежними.
+    """
+    path = tmp_path / "p.json"
+    _load_project(window, path=path, dirty=True)
+    original = window.project_model
+    AutosaveModel.save(window.project_model.to_json())
+    snapshot = AutosaveModel.load_latest()
+
+    new_file = tmp_path / "new.json"
+    new_model = ProjectModel(month=1, year=2025)
+    new_model.add_employee("Петров", "permanent")
+    assert storage.save_model_to_file(new_model, str(new_file))
+
+    monkeypatch.setattr(storage, "ask_open_path", lambda parent: str(new_file))
+    _answer(monkeypatch, QMessageBox.Cancel)
+
     window.open_project()
-    assert called["n"] == 0
+
+    assert window.project_model is original
+    assert window.current_file == str(path)
+    assert AutosaveModel.load_latest() == snapshot
 
 
 # ---------------------------------------------------------------------
