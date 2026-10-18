@@ -291,6 +291,10 @@ class MainWindow(QMainWindow):
     # Проект: создание / открытие / сохранение
     # ------------------------------------------------------------------
     def new_project(self):
+        # Единая проверка: не потерять несохранённые изменения текущего проекта.
+        if not self._maybe_save_changes():
+            return
+
         wizard = NewProjectWizard(self)
         if wizard.exec_() == wizard.Accepted:
             month, year, employee_ids = wizard.get_result()
@@ -303,11 +307,16 @@ class MainWindow(QMainWindow):
 
             self.current_file = None
             self._apply_model(new_model)
-            self.project_model.mark_clean()
+            # Новый проект без файла считается несохранённым даже без правок,
+            # поэтому НЕ помечаем его «чистым».
 
             self.statusBar().showMessage(f"Создан проект: {MONTHS[month]} {year}")
 
     def open_project(self):
+        # Единая проверка: не потерять несохранённые изменения текущего проекта.
+        if not self._maybe_save_changes():
+            return
+
         path = storage.ask_open_path(self)
         if not path:
             return
@@ -320,35 +329,51 @@ class MainWindow(QMainWindow):
         self.current_file = path
         self._apply_model(model)
         self.project_model.mark_clean()
-        AutosaveModel.clear()
+        # Файл только что открыт и не изменялся — автосохранение не нужно,
+        # иначе при следующем запуске появится ложное предложение восстановить.
+        self._clear_autosave()
         self.statusBar().showMessage(f"Открыт проект: {path}")
 
     def save_project(self):
+        """Сохраняет проект. Возвращает True только при реальном успехе."""
         if not self.current_file:
-            self.save_project_as()
-            return
-        if storage.save_model_to_file(self.project_model, self.current_file):
-            self.project_model.mark_clean()
-            AutosaveModel.clear()
-            self.statusBar().showMessage(f"Сохранено: {self.current_file}")
-            self._update_title()
+            return self.save_project_as()
+        return self._save_to(self.current_file)
 
     def save_project_as(self):
+        """Сохраняет проект под новым именем. Возвращает True при успехе."""
         default_name = self._default_filename()
         path = storage.ask_save_path(self, default_name)
         if not path:
-            return
-        if storage.save_model_to_file(self.project_model, path):
-            self.current_file = path
-            self.project_model.mark_clean()
-            AutosaveModel.clear()
-            self.statusBar().showMessage(f"Сохранено: {path}")
-            self._update_title()
+            # Пользователь отменил выбор файла — текущий проект не меняем.
+            return False
+        return self._save_to(path)
+
+    def _save_to(self, path):
+        """Пишет модель в файл. При успехе сбрасывает «грязное» состояние.
+
+        При ошибке записи текущий проект и текущий файл не меняются.
+        """
+        if not storage.save_model_to_file(self.project_model, path):
+            return False
+        self.current_file = path
+        self.project_model.mark_clean()
+        # Контрольная точка отмены совпадает с состоянием файла.
+        self.undo_stack.setClean()
+        # Сохранённая версия теперь в файле — отложенный автосейв не нужен,
+        # иначе таймер воскресит запись после успешного сохранения.
+        self._clear_autosave()
+        self.statusBar().showMessage(f"Сохранено: {path}")
+        self._update_title()
+        return True
 
     # ------------------------------------------------------------------
     # Внутренние
     # ------------------------------------------------------------------
     def _apply_model(self, new_model):
+        # Гасим отложенный автосейв предыдущего проекта, чтобы он не сработал
+        # уже на новом проекте.
+        self._autosave_timer.stop()
         self._project_loaded = True
         self.project_model = new_model
         self.controller = ProjectController(self.project_model, self.table)
@@ -388,6 +413,54 @@ class MainWindow(QMainWindow):
         y = self.project_model.year
         return get("project_filename").format(month=MONTHS[m], year=y)
     
+    def _clear_autosave(self):
+        """Гасит отложенный таймер и удаляет запись автосохранения."""
+        self._autosave_timer.stop()
+        try:
+            AutosaveModel.clear()
+        except Exception:
+            logger.exception("Ошибка очистки автосохранения")
+
+    def _has_unsaved_changes(self):
+        """Есть ли в текущем проекте несохранённые изменения.
+
+        Учитываются два случая:
+          - проект без файла считается несохранённым всегда (новая работа);
+          - иначе — расхождение контрольной точки стека отмены с текущим
+            состоянием (после полного Undo состояние снова «чистое»).
+        """
+        if not self._project_loaded:
+            return False
+        if not self.current_file:
+            return True
+        return not self.undo_stack.isClean()
+
+    def _maybe_save_changes(self):
+        """Единая проверка перед закрытием или заменой текущего проекта.
+
+        Возвращает True, если продолжать можно (изменений нет, либо
+        пользователь сохранил, либо отказался от них). False — отмена.
+        """
+        if not self._has_unsaved_changes():
+            return True
+
+        reply = QMessageBox.question(
+            self, "Несохранённые изменения",
+            "В проекте есть несохранённые изменения.\n"
+            "Сохранить их перед продолжением?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save
+        )
+        if reply == QMessageBox.Save:
+            # Успех сохранения — единственный признак, что можно продолжать.
+            return self.save_project()
+        if reply == QMessageBox.Discard:
+            # Явный отказ от изменений — автосохранение не должно
+            # предлагаться к восстановлению при следующем запуске.
+            self._clear_autosave()
+            return True
+        return False
+
     def _do_autosave(self):
         """Реальное сохранение в SQLite. Вызывается по таймеру или принудительно."""
         try:
@@ -641,7 +714,18 @@ class MainWindow(QMainWindow):
     # Автосохранение
     # ------------------------------------------------------------------
     def _try_restore_autosave(self):
-        data = AutosaveModel.load_latest()
+        try:
+            data = AutosaveModel.load_latest()
+        except Exception:
+            # Повреждена или недоступна БД автосохранения — приложение
+            # должно продолжать работу, а не падать.
+            logger.exception("Ошибка чтения автосохранения")
+            QMessageBox.warning(
+                self, "Восстановление",
+                "Не удалось прочитать автосохранение предыдущей сессии.\n"
+                "Приложение продолжит работу без восстановления."
+            )
+            return
         if not data:
             return
 
@@ -670,30 +754,13 @@ class MainWindow(QMainWindow):
     # Закрытие окна
     # ------------------------------------------------------------------
     def closeEvent(self, event):
-        # Если несохранённых изменений нет — закрываем без диалога.
-        # Автосейв не трогаем: он хранит последнее рабочее состояние.
-        if not self.project_model.is_dirty():
-            event.accept()
+        # Единый механизм: нет изменений — закрываем; есть — спрашиваем.
+        if not self._maybe_save_changes():
+            event.ignore()
             return
 
-        reply = QMessageBox.question(
-            self, "Несохранённые изменения",
-            "В проекте есть несохранённые изменения.\n"
-            "Сохранить перед закрытием?",
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-            QMessageBox.Save
-        )
-        if reply == QMessageBox.Save:
-            self.save_project()
-            if self.project_model.is_dirty():
-                # Сохранить не удалось (отмена выбора файла или ошибка)
-                event.ignore()
-                return
-            event.accept()
-        elif reply == QMessageBox.Discard:
-            # Пользователь явно отказался от изменений — очищаем автосейв,
-            # чтобы при следующем запуске не предлагать восстановить отвергнутое.
-            AutosaveModel.clear()
-            event.accept()
-        else:
-            event.ignore()
+        # Нормальное завершение работы: автосохранение не нужно, иначе
+        # при следующем запуске появится ложное сообщение о восстановлении.
+        # При аварийном завершении (closeEvent не вызывается) запись остаётся.
+        self._clear_autosave()
+        event.accept()

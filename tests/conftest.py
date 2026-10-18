@@ -1,5 +1,10 @@
 # tests/conftest.py
 
+import os
+
+# GUI-тесты должны работать без реального дисплея (в т.ч. на CI и в песочнице).
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 import pytest
 from models.project_model import ProjectModel
 
@@ -22,3 +27,11 @@ def filled_day_model():
         m.add_employee(f"Emp{i}", "permanent")
         m.employees[-1]["days"][0] = code
     return m
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    """Единый QApplication на всю сессию тестов."""
+    from PyQt5.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    yield app
