@@ -9,6 +9,11 @@ from utils.rules import (
     allowed_values,
     normalize_on_clear,
     allowed_special_values,
+    is_permanent_available,
+    is_parttime_available,
+    is_parttime_on_place,
+    is_day_started,
+    count_day_workforce,
 )
 
 
@@ -100,3 +105,57 @@ def test_allowed_special_values_oper():
     values = set(allowed_special_values("О"))
     for v in SPECIAL_VALUES_OPER:
         assert v in values
+
+
+# ---------------------------------------------------------------
+# Прогностические предупреждения: чистые функции
+# ---------------------------------------------------------------
+
+def test_is_permanent_available():
+    """Постоянный доступен, если значение не «вых»."""
+    for value in ["", "З", "Д", "до 16", "до 17"]:
+        assert is_permanent_available(value) is True
+    assert is_permanent_available("вых") is False
+
+
+def test_is_parttime_available():
+    """Совместитель доступен со «*» или на конкретном месте."""
+    for value in ["*", "З", "Д"]:
+        assert is_parttime_available(value) is True
+    for value in ["", "вых"]:
+        assert is_parttime_available(value) is False
+
+
+def test_is_parttime_on_place():
+    """Совместитель на месте — только рабочий код, не «*»."""
+    for value in ["З", "Д"]:
+        assert is_parttime_on_place(value) is True
+    for value in ["*", ""]:
+        assert is_parttime_on_place(value) is False
+
+
+def test_is_day_started():
+    """День начат, если хотя бы у одного сотрудника непустая ячейка."""
+    assert is_day_started([], 0) is False
+    assert is_day_started([{"days": [""]}], 0) is False
+    assert is_day_started([{"days": [""]}, {"days": ["З"]}], 0) is True
+    assert is_day_started([{"days": []}], 0) is False
+
+
+def test_count_day_workforce():
+    """Смешанный состав даёт правильные Суммы 1 и 3."""
+    employees = [
+        {"category": CATEGORY_PERMANENT, "days": [""]},      # обе суммы
+        {"category": CATEGORY_PERMANENT, "days": ["вых"]},   # ни одной
+        {"category": CATEGORY_PERMANENT, "days": ["З"]},     # обе суммы
+        {"category": CATEGORY_PARTTIME, "days": ["*"]},      # только Сумма 1
+        {"category": CATEGORY_PARTTIME, "days": ["Д"]},      # обе суммы
+        {"category": CATEGORY_PARTTIME, "days": [""]},       # ни одной
+    ]
+    stats = count_day_workforce(employees, 0)
+
+    assert stats["permanent_available"] == 2
+    assert stats["parttime_on_place"] == 1
+    assert stats["available"] == 4
+    assert stats["committed"] == 3
+    assert stats["available"] >= stats["committed"]
