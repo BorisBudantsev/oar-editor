@@ -5,6 +5,7 @@ from utils.constants import (
     CATEGORY_PERMANENT, CATEGORY_PARTTIME,
     SPECIAL_VALUES_ENDO, SPECIAL_VALUES_OPER,
 )
+from utils.rules import is_day_started, count_day_workforce
 
 
 WORKING_CODES = CODES_OPERATION + CODES_ENDO + ["Д"]
@@ -103,6 +104,40 @@ def check_day(model, day_idx):
     if n_endo > E:
         errors.append({"day": day_num, "rule": "Эндоскопия",
                        "message": f"Занято эндоскопических мест {n_endo}, а по плану {E}"})
+
+    # Правила 6–7: прогностические предупреждения.
+    # Применяются только к «начатым» дням с валидным планом Э/О —
+    # иначе N_planned неверен и предупреждения дают шум.
+    plan_is_valid = (
+        e_val in ALLOWED_SPECIAL_ENDO
+        and o_val in ALLOWED_SPECIAL_OPER
+    )
+    if plan_is_valid and is_day_started(employees, day_idx):
+        stats = count_day_workforce(employees, day_idx)
+        available = stats["available"]
+        committed = stats["committed"]
+
+        if available < N_planned:
+            errors.append({
+                "day": day_num,
+                "rule": "Мало работников",
+                "message": (
+                    f"Доступно {available}, требуется {N_planned}. "
+                    f"Не хватает {N_planned - available}."
+                ),
+            })
+
+        if committed > N_planned:
+            excess = committed - N_planned
+            errors.append({
+                "day": day_num,
+                "rule": "Избыток работников",
+                "message": (
+                    f"Доступно {committed}, требуется {N_planned}. "
+                    f"Избыток: {excess}. Уберите с мест или "
+                    f"предоставьте выходной."
+                ),
+            })
 
     return errors
 
